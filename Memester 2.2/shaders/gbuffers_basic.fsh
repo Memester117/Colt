@@ -1,54 +1,36 @@
 #version 120
-
 /*
-
-
-
-			███████ ███████ ███████ ███████ █
-			█          █    █     █ █     █ █
-			███████    █    █     █ ███████ █
-			      █    █    █     █ █       
-			███████    █    ███████ █       █
-
-	Before you change anything here, please notice that you
-	are allowed to modify my shaderpack ONLY for yourself!
-
-	Please read my agreement for more informations!
-		- http://bit.ly/1De7OOY
-
-		
-		
+This code is from Chocapic13' shaders
+Read the terms of modification and sharing before changing something below please !
 */
 
-//////////////////////////////////////////////////////////////
-////////////////////////// CONSTS ////////////////////////////
-//////////////////////////////////////////////////////////////
+/*
+						[][][][][] [][][][][] [][][][][] [][][][][] []   	  
+						[]	  	       []     []      [] []	     [] []        
+						[]	 	       []     []      [] []	     [] []  	    	
+						[][][][][]     []     []      [] [][][][][] []   	  
+								[]     []     []      [] []	        []        
+								[]     []     []      [] []	              	  
+						[][][][][]     []     [][][][][] []	        []        
+						Before editing anything here make sure you've 
+						read The agreement, which you accepted by downloading
+						my shaderpack. The agreement can be found here:
+ http://www.minecraftforum.net/forums/mapping-and-modding/minecraft-mods/2348685-kadir-nck-shader-v1-2
+						   
+				Kadir Nck's shaders, derived from Chocapic's shaders */
 
 const int GL_LINEAR = 9729;
 const int GL_EXP = 2048;
-
-//////////////////////////////////////////////////////////////
-//////////////////////// GET MATERIAL ////////////////////////
-//////////////////////////////////////////////////////////////
 
 varying vec4 color;
 
 uniform int fogMode;
 
-
-
-
-
-
-
-
-
-
-
-
-//////////////////////////////////////////////////////////////
-/////////////////////////// MAIN /////////////////////////////
-//////////////////////////////////////////////////////////////
+//////////////////////////////main//////////////////////////////
+//////////////////////////////main//////////////////////////////
+//////////////////////////////main//////////////////////////////
+//////////////////////////////main//////////////////////////////
+//////////////////////////////main//////////////////////////////
 
 void main() {
 	
@@ -60,7 +42,9 @@ void main() {
 	gl_FragData[1] = vec4(0.0, 0.0, 0.0, 1.0);
 	if (fogMode == GL_EXP) {
 		gl_FragData[0].rgb = mix(gl_FragData[0].rgb, (gl_Fog.color.rgb), 1.0 - clamp(exp(-gl_Fog.density * gl_FogFragCoord), 0.0, 1.0));
-	} else if (fogMode == GL_LINEAR) {
+	}
+	
+	else if (fogMode == GL_LINEAR) {
 		gl_FragData[0].rgb = mix(gl_FragData[0].rgb, (gl_Fog.color.rgb ), clamp((gl_FogFragCoord - gl_Fog.start) * gl_Fog.scale, 0.0, 1.0));
 	}
 	

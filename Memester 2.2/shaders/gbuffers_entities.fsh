@@ -1,51 +1,44 @@
 #version 120
-
-/* DRAWBUFFERS:024 */
-
 /*
-
-
-
-			███████ ███████ ███████ ███████ █
-			█          █    █     █ █     █ █
-			███████    █    █     █ ███████ █
-			      █    █    █     █ █       
-			███████    █    ███████ █       █
-
-	Before you change anything here, please notice that you
-	are allowed to modify my shaderpack ONLY for yourself!
-
-	Please read my agreement for more informations!
-		- http://bit.ly/1De7OOY
-
-		
-		
+This code is from Chocapic13' shaders
+Read the terms of modification and sharing before changing something below please !
 */
 
-//////////////////////////////////////////////////////////////
-////////////////////// ADJUSTABLE CONSTS /////////////////////
-//////////////////////////////////////////////////////////////
+/*
+						[][][][][] [][][][][] [][][][][] [][][][][] []   	  
+						[]	  	       []     []      [] []	     [] []        
+						[]	 	       []     []      [] []	     [] []  	    	
+						[][][][][]     []     []      [] [][][][][] []   	  
+								[]     []     []      [] []	        []        
+								[]     []     []      [] []	              	  
+						[][][][][]     []     [][][][][] []	        []        
+						Before editing anything here make sure you've 
+						read The agreement, which you accepted by downloading
+						my shaderpack. The agreement can be found here:
+ http://www.minecraftforum.net/forums/mapping-and-modding/minecraft-mods/2348685-kadir-nck-shader-v1-2
+						   
+				Kadir Nck's shaders, derived from Chocapic's shaders */
+/* DRAWBUFFERS:024 */
+
+//////////////////////////////ADJUSTABLE VARIABLES
+//////////////////////////////ADJUSTABLE VARIABLES
+//////////////////////////////ADJUSTABLE VARIABLES
+
+#define MIN_LIGHTAMOUNT 0.1		//affect the minecraft lightmap (not torches)
+#define MINELIGHTMAP_EXP 2.0		//affect the minecraft lightmap (not torches)
+
+//////////////////////////////END OF ADJUSTABLE VARIABLES
+//////////////////////////////END OF ADJUSTABLE VARIABLES
+//////////////////////////////END OF ADJUSTABLE VARIABLES
+
+
 
 const int GL_EXP = 2048;
 const int GL_LINEAR = 9729;
 const int MAX_OCCLUSION_POINTS = 20;
 const float MAX_OCCLUSION_DISTANCE = 100.0;
-const float bump_distance = 64.0;			// Bump render distance: tiny = 32, short = 64, normal = 128, far = 256.
+const float bump_distance = 64.0;		//bump render distance: tiny = 32, short = 64, normal = 128, far = 256
 const float fademult = 0.1;
-
-
-
-
-
-
-
-
-
-
-
-//////////////////////////////////////////////////////////////
-//////////////////////// GET MATERIAL ////////////////////////
-//////////////////////////////////////////////////////////////
 
 varying vec4 color;
 varying vec4 texcoord;
@@ -56,19 +49,11 @@ varying float distance;
 
 uniform sampler2D texture;
 
-
-
-
-
-
-
-
-
-
-
-//////////////////////////////////////////////////////////////
-/////////////////////////// MAIN /////////////////////////////
-//////////////////////////////////////////////////////////////
+//////////////////////////////main//////////////////////////////
+//////////////////////////////main//////////////////////////////
+//////////////////////////////main//////////////////////////////
+//////////////////////////////main//////////////////////////////
+//////////////////////////////main//////////////////////////////
 
 void main() {	
 	
