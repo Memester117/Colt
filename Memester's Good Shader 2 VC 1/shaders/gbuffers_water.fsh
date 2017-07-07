@@ -3,8 +3,8 @@
 
 #define PARALLAX_WATER
 
-#define WAVE_HEIGHT 0.62f
-#define WAVE_HEIGHT_RAIN 1.7f
+#define WAVE_HEIGHT 0.22f
+#define WAVE_HEIGHT_RAIN 0.7f
 
 uniform sampler2D texture;
 uniform sampler2D specular;
