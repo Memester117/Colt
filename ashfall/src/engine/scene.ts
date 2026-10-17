@@ -13,6 +13,17 @@ function recentMemory(state: GameState): string | null {
   return `You remember: ${entry.text}`;
 }
 
+const SHORT_DEST: Record<string, string> = {
+  hollowmere: 'Hollowmere',
+  candleinn: 'Candle & Crow',
+  millcreek: 'Millcreek',
+  ashroad: 'Ashroad',
+  reedfen: 'Reedfen',
+  burntwatch: 'Burnt Watch',
+  ashcamp: 'Ash Camp',
+  sunken_chapel: 'Sunken Chapel',
+};
+
 export function composeScene(state: GameState, announce = true): GameState {
   const next = structuredClone(state);
   next.choices = [];
@@ -27,15 +38,22 @@ export function composeScene(state: GameState, announce = true): GameState {
   if (announce) {
     const atmos = pick(rng, loc.atmosphere);
     const beat = pick(rng, next.time === 'night' || next.time === 'dusk' ? loc.nightBeat : loc.dayBeat);
+    const weatherBit =
+      next.weather === 'storm'
+        ? ' Stormlight makes every decision feel louder.'
+        : next.weather === 'ashwind'
+          ? ' Ash rides the wind like unfinished business.'
+          : next.weather === 'mist'
+            ? ' Mist edits the edges of the world.'
+            : '';
     const header = `**${loc.name}** — ${timeLabel(next.time)}, ${weatherLabel(next.weather)}.`;
-    pushLog(next, { kind: 'narration', text: `${header} ${atmos} ${beat}` });
+    pushLog(next, { kind: 'narration', text: `${header} ${atmos} ${beat}${weatherBit}` });
 
     if (chance(rng, 0.35)) {
       const mem = recentMemory(next);
       if (mem) pushLog(next, { kind: 'narration', text: mem });
     }
 
-    // Soft quest nudges
     if (loc.id === 'hollowmere' && !next.quests.wolves) {
       pushLog(next, {
         kind: 'narration',
@@ -50,137 +68,159 @@ export function composeScene(state: GameState, announce = true): GameState {
     }
   }
 
-  // Travel choices
-  for (const exit of loc.exits) {
-    if (exit.requiresFlag && !flagTrue(next, exit.requiresFlag)) continue;
-    next.choices.push({
-      id: `travel_${exit.to}`,
-      label: exit.label,
-      kind: 'travel',
-      targetId: exit.to,
-      hint: `${exit.hours}h · ${exit.risk} risk`,
-    });
-  }
-
-  // Talk to locals
-  for (const npcId of loc.locals) {
-    const npc = getNpc(npcId);
-    if (!npc) continue;
-    const mem = next.npcs[npcId];
-    const known = mem?.met ? npc.name : npc.title;
-    next.choices.push({
-      id: `talk_${npcId}`,
-      label: mem?.met ? `Talk with ${npc.name}` : `Approach the ${npc.title}`,
-      kind: 'talk',
-      targetId: npcId,
-      hint: known,
-      attribute: 'presence',
-      dc: 10,
-    });
-  }
-
-  next.choices.push({
-    id: 'investigate',
-    label: 'Look around carefully',
-    kind: 'investigate',
-    attribute: 'wits',
-    dc: 12,
-  });
-
-  next.choices.push({
-    id: 'rest',
-    label: loc.tags.includes('safe') || loc.tags.includes('inn') ? 'Rest and recover' : 'Make a wary camp',
-    kind: 'rest',
-    attribute: 'endurance',
-    dc: loc.tags.includes('safe') ? 8 : 13,
-  });
-
-  next.choices.push({
-    id: 'wait',
-    label: 'Wait and watch the hours turn',
-    kind: 'wait',
-  });
-
-  // Contextual help / bargain / use
+  // —— Focus (quest-critical) ——
   if (loc.id === 'hollowmere' && hasItem(next, 'wolf_ear') && !flagTrue(next, 'quest_wolves_done')) {
-    next.choices.unshift({
+    next.choices.push({
       id: 'turn_in_wolves',
-      label: 'Turn in ash-wolf proof to Mira',
+      label: 'Turn in wolf proof',
       kind: 'bargain',
       targetId: 'mira',
+      group: 'focus',
+      hint: 'Mira · bounty',
     });
   }
   if (hasItem(next, 'letter') && loc.id === 'candleinn') {
-    next.choices.unshift({
+    next.choices.push({
       id: 'deliver_letter',
-      label: 'Deliver the letter to Brenna',
+      label: 'Deliver the letter',
       kind: 'use',
       targetId: 'brenna',
+      group: 'focus',
+      hint: 'Brenna',
     });
   }
   if (hasItem(next, 'dispatch') && loc.id === 'burntwatch') {
-    next.choices.unshift({
+    next.choices.push({
       id: 'deliver_dispatch',
-      label: 'Deliver the sealed dispatch',
+      label: 'Deliver the dispatch',
       kind: 'use',
       targetId: 'captain_rhel',
+      group: 'focus',
+      hint: 'Captain Rhel',
     });
   }
   if (flagTrue(next, 'boy_found') && !flagTrue(next, 'boy_rescued') && loc.id === 'sunken_chapel') {
-    next.choices.unshift({
+    next.choices.push({
       id: 'rescue_boy',
-      label: 'Lead the apprentice out of the chapel',
+      label: 'Lead the apprentice out',
       kind: 'help',
       attribute: 'spirit',
       dc: 11,
+      group: 'focus',
     });
   }
   if (flagTrue(next, 'boy_rescued') && loc.id === 'millcreek' && !next.quests.apprentice?.completed) {
-    next.choices.unshift({
+    next.choices.push({
       id: 'return_boy',
-      label: 'Return the apprentice to Garrick',
+      label: 'Return the apprentice',
       kind: 'help',
       targetId: 'garrick',
+      group: 'focus',
+      hint: 'Garrick',
     });
   }
-  if (loc.id === 'ashcamp' && !flagTrue(next, 'serra_terms') && (next.npcs.serra?.met || next.chapter >= 1)) {
+  if (flagTrue(next, 'serra_terms') && loc.id === 'hollowmere' && !flagTrue(next, 'quest_alliance_done')) {
+    next.choices.push({
+      id: 'relay_terms',
+      label: 'Relay Serra\'s terms',
+      kind: 'bargain',
+      targetId: 'mira',
+      group: 'focus',
+      hint: 'Mira',
+    });
+  }
+  if (
+    loc.id === 'hollowmere' &&
+    !hasItem(next, 'dispatch') &&
+    !flagTrue(next, 'quest_dispatch_done') &&
+    !next.flags.dispatch_taken
+  ) {
+    next.choices.push({
+      id: 'take_dispatch',
+      label: 'Take the dispatch job',
+      kind: 'help',
+      targetId: 'tamsin',
+      group: 'focus',
+      hint: 'Notice board',
+    });
+  }
+  if (loc.id === 'ashcamp' && !flagTrue(next, 'serra_terms')) {
     next.choices.push({
       id: 'ask_alliance',
-      label: 'Ask Serra about an alliance with Hollowmere',
+      label: 'Ask about alliance',
       kind: 'bargain',
       targetId: 'serra',
       attribute: 'presence',
       dc: 14,
+      group: 'focus',
+      hint: 'Serra',
     });
   }
-  if (flagTrue(next, 'serra_terms') && loc.id === 'hollowmere' && !flagTrue(next, 'quest_alliance_done')) {
-    next.choices.unshift({
-      id: 'relay_terms',
-      label: 'Relay Serra\'s terms to Mira',
-      kind: 'bargain',
-      targetId: 'mira',
-    });
-  }
-  if (loc.id === 'hollowmere' && !hasItem(next, 'dispatch') && !flagTrue(next, 'quest_dispatch_done') && !next.flags.dispatch_taken) {
-    next.choices.push({
-      id: 'take_dispatch',
-      label: 'Accept the sealed dispatch job from the notice board',
-      kind: 'help',
-      targetId: 'tamsin',
-    });
-  }
-
-  // Inventory use: herbs
   if (hasItem(next, 'herbs') && next.hp < next.maxHp) {
     next.choices.push({
       id: 'use_herbs',
-      label: 'Use herb satchel to tend wounds',
+      label: 'Tend wounds',
       kind: 'use',
       targetId: 'herbs',
+      group: 'focus',
+      hint: 'Herbs',
     });
   }
 
-  // Deduplicate by id
+  // —— People ——
+  for (const npcId of loc.locals) {
+    const npc = getNpc(npcId);
+    if (!npc) continue;
+    const mem = next.npcs[npcId];
+    next.choices.push({
+      id: `talk_${npcId}`,
+      label: mem?.met ? npc.name.split(' ')[0]! : shortTitle(npc.title),
+      kind: 'talk',
+      targetId: npcId,
+      hint: mem?.met ? npc.title : 'stranger',
+      attribute: 'presence',
+      dc: 10,
+      group: 'people',
+    });
+  }
+
+  // —— Travel ——
+  for (const exit of loc.exits) {
+    if (exit.requiresFlag && !flagTrue(next, exit.requiresFlag)) continue;
+    next.choices.push({
+      id: `travel_${exit.to}`,
+      label: SHORT_DEST[exit.to] ?? exit.label,
+      kind: 'travel',
+      targetId: exit.to,
+      hint: `${exit.hours}h · ${exit.risk}`,
+      group: 'travel',
+    });
+  }
+
+  // —— Pace ——
+  next.choices.push({
+    id: 'investigate',
+    label: 'Look around',
+    kind: 'investigate',
+    attribute: 'wits',
+    dc: 12,
+    group: 'pace',
+  });
+  next.choices.push({
+    id: 'rest',
+    label: loc.tags.includes('safe') || loc.tags.includes('inn') ? 'Rest' : 'Camp',
+    kind: 'rest',
+    attribute: 'endurance',
+    dc: loc.tags.includes('safe') ? 8 : 13,
+    group: 'pace',
+  });
+  next.choices.push({
+    id: 'wait',
+    label: 'Wait',
+    kind: 'wait',
+    group: 'pace',
+  });
+
   const seen = new Set<string>();
   next.choices = next.choices.filter((c: Choice) => {
     if (seen.has(c.id)) return false;
@@ -191,12 +231,17 @@ export function composeScene(state: GameState, announce = true): GameState {
   return next;
 }
 
+function shortTitle(title: string): string {
+  const first = title.split(/[\s,]/)[0] ?? title;
+  return first.charAt(0).toUpperCase() + first.slice(1);
+}
+
 function composeCombat(state: GameState, announce: boolean): GameState {
   const enc = state.encounter!;
   if (announce) {
     pushLog(state, {
       kind: 'narration',
-      text: `Encounter: **${enc.name}** — threat looming (${enc.hp}/${enc.maxHp}). Your body answers before your doubts do.`,
+      text: `Encounter: **${enc.name}** — (${enc.hp}/${enc.maxHp}). Your body answers before your doubts do.`,
     });
   }
   state.choices = [
@@ -206,7 +251,8 @@ function composeCombat(state: GameState, announce: boolean): GameState {
       kind: 'fight',
       attribute: 'might',
       dc: enc.threat,
-      hint: 'Steel and stubbornness',
+      hint: 'Might',
+      group: 'focus',
     },
     {
       id: 'sneak_fight',
@@ -214,15 +260,17 @@ function composeCombat(state: GameState, announce: boolean): GameState {
       kind: 'sneak',
       attribute: 'grace',
       dc: enc.threat,
-      hint: 'Feet smarter than fists',
+      hint: 'Grace',
+      group: 'focus',
     },
     {
       id: 'presence_fight',
-      label: 'Face them down',
+      label: 'Stare down',
       kind: 'bargain',
       attribute: 'presence',
       dc: enc.threat + 1,
-      hint: 'Voice as weapon',
+      hint: 'Presence',
+      group: 'focus',
     },
   ];
   if (enc.canFlee) {
@@ -232,6 +280,7 @@ function composeCombat(state: GameState, announce: boolean): GameState {
       kind: 'flee',
       attribute: 'grace',
       dc: enc.threat - 1,
+      group: 'pace',
     });
   }
   return state;

@@ -1,6 +1,18 @@
 import { ENCOUNTERS, encountersFor, type EncounterDef } from '../content/encounters';
 import { getLocation } from '../content/locations';
 import { getNpc } from '../content/npcs';
+import {
+  COMBAT_HIT,
+  FLEE,
+  GENERIC,
+  IMPROV,
+  INVESTIGATE,
+  REST,
+  TRAVEL,
+  WAIT,
+  gradeFromCheck,
+  type OutcomeGrade,
+} from '../content/outcomes';
 import { ATTR_LABEL, check } from './dice';
 import { createRng, pick, chance, hashSeed } from './rng';
 import { composeScene } from './scene';
@@ -88,16 +100,40 @@ function resolveRoll(
   choice: Choice,
   rng: () => number,
   bonus = 0,
-): { success: boolean; total: number; dc: number } {
+): { success: boolean; total: number; dc: number; grade: OutcomeGrade; crit: boolean; fumble: boolean } {
   const attr = choice.attribute ?? 'wits';
   const dc = choice.dc ?? 12;
   const result = check(rng, state.attributes, attr, dc, bonus);
+  const grade = gradeFromCheck(result);
+  const gradeLabel: Record<OutcomeGrade, string> = {
+    crit: 'critical',
+    success: 'success',
+    mixed: result.success ? 'bare success' : 'near miss',
+    fail: 'failure',
+    fumble: 'fumble',
+  };
   pushLog(state, {
     kind: 'roll',
-    text: `${ATTR_LABEL[attr]} check: ${result.roll}${result.mod >= 0 ? '+' : ''}${result.mod} = ${result.total} vs DC ${dc} — ${result.success ? (result.crit ? 'critical success' : 'success') : result.fumble ? 'fumble' : 'failure'}`,
+    text: `${ATTR_LABEL[attr]}: ${result.roll}${result.mod >= 0 ? '+' : ''}${result.mod} = ${result.total} vs ${dc} — ${gradeLabel[grade]}`,
     roll: { label: ATTR_LABEL[attr], total: result.total, dc, success: result.success },
   });
-  return { success: result.success, total: result.total, dc };
+  return {
+    success: result.success,
+    total: result.total,
+    dc,
+    grade,
+    crit: result.crit,
+    fumble: result.fumble,
+  };
+}
+
+function lineFrom(
+  bank: Record<OutcomeGrade, readonly string[]> | { crit: readonly string[]; success: readonly string[]; mixed: readonly string[]; fail: readonly string[]; fumble: readonly string[] },
+  grade: OutcomeGrade,
+  rng: () => number,
+): string {
+  const list = bank[grade] ?? bank.fail;
+  return pick(rng, list);
 }
 
 function talk(state: GameState, npcId: string, rng: () => number): void {
@@ -110,7 +146,16 @@ function talk(state: GameState, npcId: string, rng: () => number): void {
   else state.npcs[npcId]!.met = true;
 
   const attitude = state.npcs[npcId]!.attitude;
-  pushLog(state, { kind: 'narration', text: pick(rng, npc.greetings) });
+  const greet = pick(rng, npc.greetings);
+  const approach =
+    attitude <= -2
+      ? pick(rng, ['They do not bother hiding dislike.', 'The air between you goes thin.'])
+      : attitude >= 2
+        ? pick(rng, ['They soften when they see you.', 'Recognition warms the greeting.'])
+        : chance(rng, 0.4)
+          ? pick(rng, ['They size you up in a glance.', 'A beat of silence, then words.'])
+          : null;
+  pushLog(state, { kind: 'narration', text: approach ? `${greet} ${approach}` : greet });
 
   // Pick a topic keyed to flags / inventory / location
   const topicKeys = Object.keys(npc.topics);
@@ -194,16 +239,22 @@ function talk(state: GameState, npcId: string, rng: () => number): void {
   addChronicle(state, `Spoke with ${npc.name} about ${topic}.`, ['talk', npcId]);
 }
 
-function investigate(state: GameState, rng: () => number, success: boolean): void {
+function investigate(state: GameState, rng: () => number, grade: OutcomeGrade): void {
   const loc = getLocation(state.locationId);
-  if (success) {
+  const found = grade === 'crit' || grade === 'success' || (grade === 'mixed' && chance(rng, 0.65));
+  pushLog(state, { kind: 'narration', text: lineFrom(INVESTIGATE, grade, rng) });
+
+  if (found) {
     const hook = pick(rng, loc.investigateHooks);
-    pushLog(state, { kind: 'narration', text: `You find something: ${hook}` });
+    pushLog(state, { kind: 'narration', text: `You find: ${hook}` });
     if (loc.id === 'reedfen' || loc.id === 'millcreek') {
       state.flags.knows_chapel = true;
       pushLog(state, {
         kind: 'narration',
-        text: 'The evidence leans toward a drowned chapel deeper in the fen — a place songs warn about and maps omit.',
+        text: pick(rng, [
+          'The evidence leans toward a drowned chapel deeper in the fen — a place songs warn about and maps omit.',
+          'Fen mud keeps footprints like gossip. They point toward drowned stone.',
+        ]),
       });
       ensureQuest(state, 'apprentice', 0);
     }
@@ -211,63 +262,129 @@ function investigate(state: GameState, rng: () => number, success: boolean): voi
       state.flags.saw_ashcamp = true;
       pushLog(state, {
         kind: 'narration',
-        text: 'Fresh tracks climb toward a camp on the ridge. Ash Camp is not a rumor today.',
+        text: pick(rng, [
+          'Fresh tracks climb toward a camp on the ridge. Ash Camp is not a rumor today.',
+          'Boot-scuffs and a discarded ration wrap: people live above the burn line.',
+        ]),
       });
     }
-    if (loc.id === 'burntwatch' && chance(rng, 0.4)) {
+    if (grade === 'crit' && chance(rng, 0.45)) {
+      state.coin += 1 + Math.floor(rng() * 3);
+      pushLog(state, { kind: 'system', text: 'A forgotten coin or two finds your palm.' });
+    }
+    if (grade === 'mixed') {
+      applyStress(state, 1);
+      if (chance(rng, 0.3)) {
+        state.hp = clamp(state.hp - 1, 1, state.maxHp);
+        pushLog(state, { kind: 'result', text: 'A splinter, a slip, a small price (−1 HP).' });
+      }
+    }
+    if (loc.id === 'burntwatch' && chance(rng, grade === 'crit' ? 0.55 : 0.35)) {
       const pool = encountersFor('burntwatch');
       if (pool.length) startEncounter(state, pick(rng, pool), rng);
     }
-    if (loc.id === 'candleinn' && chance(rng, 0.5)) {
+    if (loc.id === 'candleinn' && chance(rng, 0.45)) {
       pushLog(state, {
         kind: 'narration',
-        text: 'Brenna notices your snooping. "Curiosity is free. Consequences have a menu."',
+        text: pick(rng, [
+          'Brenna notices your snooping. "Curiosity is free. Consequences have a menu."',
+          'Brenna wipes a glass. "Find what you need. Leave what isn\'t yours."',
+        ]),
       });
-      setNpcAttitude(state, 'brenna', chance(rng, 0.5) ? 0 : -1);
+      setNpcAttitude(state, 'brenna', chance(rng, 0.55) ? 0 : -1);
     }
     addChronicle(state, `Investigated ${loc.name}: ${hook}`, ['investigate', loc.id]);
   } else {
-    pushLog(state, {
-      kind: 'narration',
-      text: pick(rng, [
-        'You search until your eyes ache. The place keeps its cards close.',
-        'Nothing useful reveals itself — only the ordinary stubbornness of objects.',
-        'A red herring would be more helpful than this silence.',
-      ]),
-    });
-    applyStress(state, 1);
+    applyStress(state, grade === 'fumble' ? 2 : 1);
+    if (grade === 'fumble' && chance(rng, 0.4)) {
+      const locals = getLocation(state.locationId).locals;
+      if (locals.length) setNpcAttitude(state, pick(rng, locals), -1);
+    }
+    if (grade === 'mixed') {
+      // Near miss still hints
+      pushLog(state, {
+        kind: 'narration',
+        text: pick(rng, [
+          'You almost had it — a shape of meaning that slips. Tomorrow\'s eyes might catch it.',
+          'A partial pattern: enough to wonder, not enough to act.',
+        ]),
+      });
+    }
   }
 }
 
-function rest(state: GameState, rng: () => number, success: boolean): void {
+function rest(state: GameState, rng: () => number, grade: OutcomeGrade): void {
   const loc = getLocation(state.locationId);
   const safe = loc.tags.includes('safe') || loc.tags.includes('inn');
-  if (success) {
-    const healed = safe ? 4 + Math.floor(rng() * 3) : 2 + Math.floor(rng() * 2);
+  pushLog(state, { kind: 'narration', text: lineFrom(REST, grade, rng) });
+
+  if (grade === 'crit' || grade === 'success' || grade === 'mixed') {
+    const base = safe ? 4 : 2;
+    const bonus = grade === 'crit' ? 3 : grade === 'success' ? Math.floor(rng() * 3) : 1;
+    const healed = base + bonus;
     heal(state, healed);
-    state.stress = clamp(state.stress - (safe ? 3 : 1), 0, state.maxStress);
-    pushLog(state, {
-      kind: 'result',
-      text: safe
-        ? `Sleep takes you kindly. You recover ${healed} HP and shed some stress.`
-        : `You rest in fragments. Still, you mend by ${healed} HP.`,
-    });
+    const stressRelief = grade === 'crit' ? (safe ? 4 : 2) : grade === 'success' ? (safe ? 3 : 1) : 1;
+    state.stress = clamp(state.stress - stressRelief, 0, state.maxStress);
+    pushLog(state, { kind: 'result', text: `You recover ${healed} HP.` });
+    if (grade === 'mixed') applyStress(state, 1);
     if (safe && loc.id === 'candleinn' && state.coin >= 2) {
       state.coin -= 2;
       pushLog(state, { kind: 'system', text: 'Brenna collects 2 coin for bed and bowl.' });
     }
   } else {
-    pushLog(state, {
-      kind: 'narration',
-      text: 'Rest frays. Dreams arrive wearing boots. You wake unrestored and slightly more suspicious of pillows.',
-    });
-    applyStress(state, 1);
-    if (!safe && chance(rng, 0.45)) {
+    applyStress(state, grade === 'fumble' ? 2 : 1);
+    if (!safe && (grade === 'fumble' || chance(rng, 0.45))) {
       const pool = encountersFor(state.locationId);
       if (pool.length) startEncounter(state, pick(rng, pool), rng);
     }
   }
   advanceTime(state, safe ? 6 : 4, rng);
+}
+
+function travelRoadEvent(state: GameState, risk: 'low' | 'mid' | 'high', rng: () => number): void {
+  const roll = rng();
+  if (roll < 0.28) {
+    pushLog(state, { kind: 'narration', text: pick(rng, TRAVEL.uneventful) });
+    return;
+  }
+  if (roll < 0.4) {
+    pushLog(state, { kind: 'narration', text: pick(rng, TRAVEL.weather) });
+    if (state.weather === 'storm' || state.weather === 'ashwind') applyStress(state, 1);
+    return;
+  }
+  if (roll < 0.52) {
+    pushLog(state, { kind: 'narration', text: pick(rng, TRAVEL.find_coin) });
+    state.coin += 1 + Math.floor(rng() * (risk === 'high' ? 4 : 3));
+    return;
+  }
+  if (roll < 0.64) {
+    pushLog(state, { kind: 'narration', text: pick(rng, TRAVEL.traveler) });
+    if (chance(rng, 0.35)) {
+      const tip = pick(rng, [
+        'They mention ash-wolves favoring the east bend after dusk.',
+        'They swear the fen sings when the moon is mean.',
+        'They tip you toward Burnt Watch: "Still listening. Bring manners."',
+      ]);
+      pushLog(state, { kind: 'narration', text: tip });
+    }
+    return;
+  }
+  if (roll < 0.76) {
+    pushLog(state, { kind: 'narration', text: pick(rng, TRAVEL.omen) });
+    if (chance(rng, 0.4)) state.flags.knows_chapel = true;
+    return;
+  }
+  if (roll < 0.86) {
+    pushLog(state, { kind: 'narration', text: pick(rng, TRAVEL.snag) });
+    applyStress(state, 1);
+    if (chance(rng, 0.35)) {
+      state.hp = clamp(state.hp - 1, 1, state.maxHp);
+      pushLog(state, { kind: 'result', text: 'A scrape for the road (−1 HP).' });
+    }
+    return;
+  }
+  // Remaining chance: combat handled by caller via maybeRandomEncounter
+  pushLog(state, { kind: 'narration', text: pick(rng, TRAVEL.uneventful) });
 }
 
 function travel(state: GameState, to: string, rng: () => number): void {
@@ -284,11 +401,12 @@ function travel(state: GameState, to: string, rng: () => number): void {
   pushLog(state, {
     kind: 'narration',
     text: pick(rng, [
-      `You set out: ${exit.label.toLowerCase()}. The Marches rearrange themselves around your decision.`,
-      `Road underfoot. Sky overhead. ${exit.label}.`,
-      `You leave ${from.name} behind and let the path argue with your legs.`,
+      `You set out toward ${getLocation(to).name}.`,
+      `Leaving ${from.name} behind, you take the path to ${getLocation(to).name}.`,
+      `${exit.label}. The road accepts the decision.`,
     ]),
   });
+  travelRoadEvent(state, exit.risk, rng);
   advanceTime(state, Math.max(1, exit.hours), rng);
   state.locationId = to;
   const dest = getLocation(to);
@@ -316,63 +434,83 @@ function resolveCombat(state: GameState, choice: Choice, rng: () => number): voi
   if (!enc) return;
 
   if (choice.kind === 'flee') {
-    const { success } = resolveRoll(state, choice, rng);
+    const { success, grade } = resolveRoll(state, choice, rng);
+    pushLog(state, { kind: 'result', text: lineFrom(FLEE, grade, rng) });
     if (success) {
-      pushLog(state, {
-        kind: 'result',
-        text: 'You break contact — dignity optional, lungs mandatory. The threat does not follow.',
-      });
       state.encounter = null;
-      applyStress(state, 1);
+      applyStress(state, grade === 'mixed' ? 2 : 1);
+      if (grade === 'mixed') {
+        const dmg = 1 + Math.floor(rng() * 2);
+        state.hp = clamp(state.hp - dmg, 1, state.maxHp);
+        pushLog(state, { kind: 'result', text: `A parting scratch (−${dmg} HP).` });
+      }
       addChronicle(state, `Fled from ${enc.name}.`, ['combat', 'flee']);
     } else {
-      const dmg = 2 + Math.floor(rng() * 3);
+      const dmg = (grade === 'fumble' ? 3 : 2) + Math.floor(rng() * 3);
       state.hp = clamp(state.hp - dmg, 0, state.maxHp);
-      pushLog(state, {
-        kind: 'result',
-        text: `Fleeing fails. ${enc.name} catches you for ${dmg} damage.`,
-      });
+      pushLog(state, { kind: 'result', text: `${enc.name} catches you for ${dmg} damage.` });
       checkDefeat(state);
     }
     return;
   }
 
-  const { success } = resolveRoll(state, { ...choice, dc: choice.dc ?? enc.threat }, rng);
+  const { success, grade } = resolveRoll(state, { ...choice, dc: choice.dc ?? enc.threat }, rng);
+  pushLog(state, { kind: 'result', text: lineFrom(COMBAT_HIT, grade, rng) });
+
   if (success) {
-    const dmg = 4 + Math.floor(rng() * 5) + (choice.kind === 'fight' ? 1 : 0);
+    let dmg = 4 + Math.floor(rng() * 5) + (choice.kind === 'fight' ? 1 : 0);
+    if (grade === 'crit') dmg += 3;
+    if (grade === 'mixed') dmg = Math.max(2, dmg - 2);
     enc.hp -= dmg;
-    pushLog(state, { kind: 'result', text: `You land a decisive exchange (−${dmg} to ${enc.name}).` });
+    pushLog(state, { kind: 'system', text: `−${dmg} to ${enc.name}.` });
+    if (grade === 'mixed') {
+      const self = 1 + Math.floor(rng() * 2);
+      state.hp = clamp(state.hp - self, 0, state.maxHp);
+      pushLog(state, { kind: 'result', text: `You take ${self} in the trade.` });
+    }
     if (enc.hp <= 0) {
-      winEncounter(state, rng);
-    } else {
-      const counter = 1 + Math.floor(rng() * 3);
-      state.hp = clamp(state.hp - counter, 0, state.maxHp);
-      pushLog(state, { kind: 'result', text: `${enc.name} answers — you take ${counter} damage.` });
-      checkDefeat(state);
+      winEncounter(state, rng, grade);
+    } else if (grade !== 'crit' || chance(rng, 0.35)) {
+      const counter = grade === 'crit' ? Math.floor(rng() * 2) : 1 + Math.floor(rng() * 3);
+      if (counter > 0) {
+        state.hp = clamp(state.hp - counter, 0, state.maxHp);
+        pushLog(state, { kind: 'result', text: `${enc.name} answers — ${counter} damage.` });
+        checkDefeat(state);
+      }
     }
   } else {
-    const dmg = 2 + Math.floor(rng() * 4);
+    const dmg = (grade === 'fumble' ? 3 : 2) + Math.floor(rng() * 4);
     state.hp = clamp(state.hp - dmg, 0, state.maxHp);
-    pushLog(state, {
-      kind: 'result',
-      text: `The exchange goes badly. You take ${dmg} damage as ${enc.name} presses in.`,
-    });
-    applyStress(state, 1);
+    pushLog(state, { kind: 'result', text: `You take ${dmg} damage.` });
+    applyStress(state, grade === 'fumble' ? 2 : 1);
     checkDefeat(state);
   }
 }
 
-function winEncounter(state: GameState, rng: () => number): void {
+function winEncounter(state: GameState, rng: () => number, grade: OutcomeGrade = 'success'): void {
   const enc = state.encounter!;
   const def = ENCOUNTERS.find((e) => e.id === enc.id);
-  pushLog(state, { kind: 'result', text: `You prevail over ${enc.name}. The quiet afterward feels earned.` });
+  pushLog(state, {
+    kind: 'result',
+    text: pick(rng, [
+      `You prevail over ${enc.name}. The quiet afterward feels earned.`,
+      `${enc.name} yields the ground. You keep your breath and your name.`,
+      `End of exchange. ${enc.name} is no longer a problem with teeth.`,
+    ]),
+  });
   state.encounter = null;
-  state.coin += 2 + Math.floor(rng() * 5);
+  const lootCoin = 2 + Math.floor(rng() * 5) + (grade === 'crit' ? 3 : 0);
+  state.coin += lootCoin;
+  pushLog(state, { kind: 'system', text: `+${lootCoin} coin.` });
   if (def?.loot) {
     for (const item of def.loot) {
       addItem(state, item);
       pushLog(state, { kind: 'system', text: `Gained: ${item.name}` });
     }
+  }
+  if (grade === 'crit' && chance(rng, 0.5)) {
+    heal(state, 2);
+    pushLog(state, { kind: 'result', text: 'A clean win steadies you (+2 HP).' });
   }
   if (def?.onWinFlags) {
     for (const f of def.onWinFlags) state.flags[f] = true;
@@ -546,44 +684,37 @@ function special(state: GameState, choice: Choice, rng: () => number): boolean {
 }
 
 function customAction(state: GameState, text: string, rng: () => number): void {
-  const roll = check(rng, state.attributes, pick(rng, ['wits', 'presence', 'spirit', 'grace'] as const), 13);
+  const attr = pick(rng, ['wits', 'presence', 'spirit', 'grace'] as const);
+  const roll = check(rng, state.attributes, attr, 13);
+  const grade = gradeFromCheck(roll);
   pushLog(state, {
     kind: 'choice',
     text: `You try: "${text}"`,
   });
   pushLog(state, {
     kind: 'roll',
-    text: `Improvised attempt: ${roll.total} vs DC 13 — ${roll.success ? 'success' : 'failure'}`,
+    text: `Improvised (${ATTR_LABEL[attr]}): ${roll.total} vs 13 — ${grade}`,
     roll: { label: 'Improvised', total: roll.total, dc: 13, success: roll.success },
   });
+  pushLog(state, { kind: 'narration', text: lineFrom(IMPROV, grade, rng) });
   if (roll.success) {
-    pushLog(state, {
-      kind: 'narration',
-      text: pick(rng, [
-        'Against modest odds, it works. The Marches allow you a small authorship over the moment.',
-        'Your odd approach finds a seam in the situation. Something useful shifts.',
-        'Fortune, skill, or stubborn charm — the attempt lands.',
-      ]),
-    });
-    if (chance(rng, 0.4)) {
-      state.coin += 1 + Math.floor(rng() * 3);
+    if (grade === 'crit' || chance(rng, 0.45)) {
+      state.coin += 1 + Math.floor(rng() * 4);
       pushLog(state, { kind: 'system', text: 'A little coin finds its way to you.' });
     } else {
-      heal(state, 1);
-      setNpcAttitude(state, pick(rng, getLocation(state.locationId).locals.concat(['mira'])), 1);
+      heal(state, grade === 'mixed' ? 1 : 2);
+      const locals = getLocation(state.locationId).locals.concat(['mira']);
+      setNpcAttitude(state, pick(rng, locals), 1);
     }
+    if (grade === 'mixed') applyStress(state, 1);
     addChronicle(state, `Improvised successfully: ${text}`, ['custom']);
   } else {
-    pushLog(state, {
-      kind: 'narration',
-      text: pick(rng, [
-        'The world declines your suggestion. Reality keeps its own script.',
-        'It almost works — which is a poet\'s way of saying it doesn\'t.',
-        'You invent a clever plan. The Marches invent a counterplan.',
-      ]),
-    });
-    applyStress(state, 1);
-    if (chance(rng, 0.25)) maybeRandomEncounter(state, 'mid', rng);
+    applyStress(state, grade === 'fumble' ? 2 : 1);
+    if (grade === 'mixed') {
+      heal(state, 1);
+      pushLog(state, { kind: 'result', text: 'A scrap of progress survives the failure (+1 HP).' });
+    }
+    if (grade === 'fumble' || chance(rng, 0.28)) maybeRandomEncounter(state, 'mid', rng);
   }
 }
 
@@ -616,30 +747,39 @@ export function resolveAction(state: GameState, input: ActionInput): GameState {
         advanceTime(next, 1, rng);
         break;
       case 'investigate': {
-        const { success } = resolveRoll(next, choice, rng);
-        investigate(next, rng, success);
+        const { grade } = resolveRoll(next, choice, rng);
+        investigate(next, rng, grade);
         advanceTime(next, 1, rng);
         break;
       }
       case 'rest': {
-        const { success } = resolveRoll(next, choice, rng);
-        rest(next, rng, success);
+        const { grade } = resolveRoll(next, choice, rng);
+        rest(next, rng, grade);
         break;
       }
       case 'travel':
         if (choice.targetId) travel(next, choice.targetId, rng);
         break;
       case 'wait': {
-        pushLog(next, {
-          kind: 'narration',
-          text: pick(rng, [
-            'You let time pass. The Marches continue without needing your permission.',
-            'Watching becomes a kind of listening. Hours thin themselves out.',
-            'You wait. A dog barks somewhere. History does not.',
-          ]),
-        });
+        const vibe = chance(rng, 0.33) ? 'useful' : chance(rng, 0.5) ? 'calm' : 'tense';
+        pushLog(next, { kind: 'narration', text: pick(rng, WAIT[vibe]) });
+        if (vibe === 'useful') {
+          if (chance(rng, 0.4)) next.flags.knows_chapel = true;
+          if (chance(rng, 0.35)) {
+            pushLog(next, {
+              kind: 'narration',
+              text: pick(rng, [
+                'You catch a name twice: Serra, spoken like a ledger entry.',
+                'Someone mutters about red cloth in the fen. Curiosity has a color.',
+              ]),
+            });
+          }
+        }
+        if (vibe === 'tense') applyStress(next, 1);
         advanceTime(next, 3, rng);
-        if (chance(rng, 0.2)) maybeRandomEncounter(next, 'low', rng);
+        if (vibe === 'tense' ? chance(rng, 0.35) : chance(rng, 0.15)) {
+          maybeRandomEncounter(next, 'low', rng);
+        }
         break;
       }
       case 'help':
@@ -647,20 +787,14 @@ export function resolveAction(state: GameState, input: ActionInput): GameState {
       case 'use':
       case 'sneak':
       case 'fight': {
-        const { success } = resolveRoll(next, choice, rng);
-        pushLog(next, {
-          kind: 'narration',
-          text: success
-            ? pick(rng, [
-                'It works well enough to change the next few minutes.',
-                'Your approach finds purchase. The moment bends.',
-              ])
-            : pick(rng, [
-                'It falters. You adapt, slightly bruised in pride.',
-                'The attempt teaches you what not to try twice.',
-              ]),
-        });
-        if (!success) applyStress(next, 1);
+        const { success, grade } = resolveRoll(next, choice, rng);
+        pushLog(next, { kind: 'narration', text: lineFrom(GENERIC, grade, rng) });
+        if (success && grade === 'crit') {
+          heal(next, 1);
+          if (chance(rng, 0.5)) next.coin += 2;
+        }
+        if (success && grade === 'mixed') applyStress(next, 1);
+        if (!success) applyStress(next, grade === 'fumble' ? 2 : 1);
         advanceTime(next, 1, rng);
         break;
       }

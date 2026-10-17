@@ -76,6 +76,8 @@ export interface LogLine {
   };
 }
 
+export type ChoiceGroup = 'focus' | 'people' | 'travel' | 'pace';
+
 export interface Choice {
   id: string;
   label: string;
@@ -86,6 +88,8 @@ export interface Choice {
   dc?: number;
   requires?: string[];
   hidden?: boolean;
+  /** UI grouping — focus first, then people chips, travel & pace collapsed. */
+  group?: ChoiceGroup;
 }
 
 export interface EncounterState {

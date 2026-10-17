@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { CharacterCreate } from './components/CharacterCreate';
 import { PlayScreen } from './components/PlayScreen';
 import { TitleScreen } from './components/TitleScreen';
+import type { ClassDef } from './content/classes';
 import { beginPlay, resolveAction } from './engine/actions';
 import { createNewGame } from './engine/create';
 import { clearSave, hasSave, loadGame, saveGame } from './engine/save';
@@ -26,9 +27,9 @@ export default function App() {
     saveGame(state);
   }, [screen, state]);
 
-  function startNew(name: string, classId: string) {
+  function startNew(name: string, classId: string, custom?: ClassDef) {
     clearSave();
-    const game = beginPlay(createNewGame(name, classId));
+    const game = beginPlay(createNewGame(name, classId, undefined, custom));
     setState(game);
     setScreen('play');
     setSaveExists(true);

@@ -1,19 +1,41 @@
-import { useState } from 'react';
-import { CLASSES } from '../content/classes';
+import { useMemo, useState } from 'react';
+import { CLASSES, type ClassDef } from '../content/classes';
+import { classFromPrompt } from '../engine/customClass';
+import { ATTR_LABEL } from '../engine/dice';
+import type { Attribute } from '../engine/types';
 
 interface Props {
   onBack: () => void;
-  onStart: (name: string, classId: string) => void;
+  onStart: (name: string, classId: string, custom?: ClassDef) => void;
 }
 
 export function CharacterCreate({ onBack, onStart }: Props) {
   const [name, setName] = useState('');
+  const [mode, setMode] = useState<'preset' | 'custom'>('preset');
   const [classId, setClassId] = useState(CLASSES[0]!.id);
+  const [prompt, setPrompt] = useState('');
+
+  const custom = useMemo(() => {
+    if (mode !== 'custom' || prompt.trim().length < 3) return null;
+    return classFromPrompt(prompt);
+  }, [mode, prompt]);
+
+  const selected: ClassDef | null =
+    mode === 'custom' ? custom : (CLASSES.find((c) => c.id === classId) ?? null);
+
+  function start() {
+    if (mode === 'custom') {
+      if (!custom) return;
+      onStart(name.trim() || 'Wanderer', 'custom', custom);
+      return;
+    }
+    onStart(name.trim() || 'Wanderer', classId);
+  }
 
   return (
     <section className="create-screen">
       <h1>Who walks the Marches?</h1>
-      <p>Pick a name and a way of surviving. The road will do the rest.</p>
+      <p>Name yourself. Pick a calling — or describe one in a line.</p>
 
       <div className="field">
         <label htmlFor="hero-name">Name</label>
@@ -27,8 +49,28 @@ export function CharacterCreate({ onBack, onStart }: Props) {
         />
       </div>
 
-      <div className="field">
-        <label>Calling</label>
+      <div className="mode-toggle" role="tablist" aria-label="Calling mode">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'preset'}
+          className={`mode-toggle__btn${mode === 'preset' ? ' is-on' : ''}`}
+          onClick={() => setMode('preset')}
+        >
+          Callings
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'custom'}
+          className={`mode-toggle__btn${mode === 'custom' ? ' is-on' : ''}`}
+          onClick={() => setMode('custom')}
+        >
+          Make my own
+        </button>
+      </div>
+
+      {mode === 'preset' ? (
         <div className="class-grid" role="listbox" aria-label="Character calling">
           {CLASSES.map((c) => (
             <button
@@ -44,13 +86,41 @@ export function CharacterCreate({ onBack, onStart }: Props) {
             </button>
           ))}
         </div>
-      </div>
+      ) : (
+        <div className="field">
+          <label htmlFor="class-prompt">Describe your calling</label>
+          <input
+            id="class-prompt"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="e.g. quiet fen witch, sharp-tongued merchant, tired knight"
+            maxLength={80}
+          />
+          <p className="field-hint">No AI — keywords shape stats and gear (fighter, scout, healer, mage, thief, bard…).</p>
+        </div>
+      )}
+
+      {selected && (
+        <div className="class-preview" aria-live="polite">
+          <strong>{selected.name}</strong>
+          <span>{selected.blurb}</span>
+          <div className="class-preview__stats">
+            {(Object.keys(selected.attributes) as Attribute[]).map((k) => (
+              <span key={k}>
+                {ATTR_LABEL[k].slice(0, 3)} {selected.attributes[k]}
+              </span>
+            ))}
+            <span>HP {selected.hp}</span>
+          </div>
+        </div>
+      )}
 
       <div className="title-actions">
         <button
           type="button"
           className="btn btn--primary"
-          onClick={() => onStart(name.trim() || 'Wanderer', classId)}
+          disabled={mode === 'custom' && !custom}
+          onClick={start}
         >
           Enter Hollowmere
         </button>

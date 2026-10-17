@@ -1,4 +1,4 @@
-import { CLASSES } from '../content/classes';
+import { CLASSES, type ClassDef } from '../content/classes';
 import { createRng, pick } from './rng';
 import type { GameState, TimeOfDay, Weather } from './types';
 import { pushLog, uid } from './helpers';
@@ -6,8 +6,14 @@ import { pushLog, uid } from './helpers';
 const WEATHERS: Weather[] = ['clear', 'mist', 'rain', 'ashwind', 'storm'];
 const TIMES: TimeOfDay[] = ['dawn', 'day', 'dusk', 'night'];
 
-export function createNewGame(playerName: string, classId: string, seed?: number): GameState {
-  const classDef = CLASSES.find((c) => c.id === classId) ?? CLASSES[0]!;
+export function createNewGame(
+  playerName: string,
+  classId: string,
+  seed?: number,
+  customClass?: ClassDef,
+): GameState {
+  const classDef =
+    customClass ?? CLASSES.find((c) => c.id === classId) ?? CLASSES[0]!;
   const actualSeed = seed ?? (Math.floor(Math.random() * 1e9) ^ Date.now());
   const rng = createRng(actualSeed);
 
@@ -54,16 +60,25 @@ export function createNewGame(playerName: string, classId: string, seed?: number
     lastSaveAt: Date.now(),
   };
 
-  if (classDef.id === 'hearthwright') {
+  if (classDef.id === 'hearthwright' || classDef.gear.some((g) => g.id === 'letter')) {
     state.flags.has_letter = true;
   }
   if (classDef.id === 'ashblade') {
     state.flags.has_war_token = true;
   }
+  if (classDef.id === 'custom') {
+    state.flags.custom_class = classDef.name;
+  }
+
+  const openings = [
+    `You crest the last low hill and Hollowmere unfolds below — slate roofs, a stubborn chapel spire, smoke writing soft letters on the air. This is the Ashfall Marches. The war ended. The land did not get the memo.`,
+    `Hollowmere rises from wet fields like a promise someone is still keeping. Chimneys, a chapel tooth, mud that remembers armies. Welcome to the Ashfall Marches.`,
+    `The road delivers you to Hollowmere with rain in your collar and questions in your pockets. The Marches look finished. They are not.`,
+  ];
 
   pushLog(state, {
     kind: 'narration',
-    text: `You crest the last low hill and Hollowmere unfolds below — slate roofs, a stubborn chapel spire, smoke writing soft letters on the air. This is the Ashfall Marches. The war ended. The land did not get the memo.`,
+    text: pick(rng, openings),
   });
   pushLog(state, {
     kind: 'narration',
