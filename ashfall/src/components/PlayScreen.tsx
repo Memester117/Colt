@@ -6,7 +6,6 @@ import { startCrushAudio, stopCrushAudio } from '../engine/crushAudio';
 import { ATTR_LABEL } from '../engine/dice';
 import { timeLabel, weatherLabel } from '../engine/create';
 import type { Attribute, Choice, ChoiceGroup, GameState } from '../engine/types';
-import { TokenBurnCounter } from './TokenBurnCounter';
 
 interface Props {
   state: GameState;
@@ -203,7 +202,6 @@ export function PlayScreen({
                   : 'shrunk · then stepped on'
                 : `${timeLabel(state.time)} · ${weatherLabel(state.weather)} · ${loc.region}`}
             </div>
-            {!crushed && <TokenBurnCounter />}
           </div>
           {!crushed && (
             <button
@@ -245,7 +243,6 @@ export function PlayScreen({
               muted
               playsInline
             />
-            <TokenBurnCounter compact />
             <p className="crush-caption">
               {betweenToes
                 ? 'Capella Emerada Lugunica — already bug-sized between her toes.'
