@@ -40,6 +40,7 @@ import {
   setNpcAttitude,
 } from './helpers';
 import { parseFreeText } from './parse';
+import { getCapellaLoops, setCapellaLoops } from './save';
 
 const TIME_ORDER: TimeOfDay[] = ['dawn', 'day', 'dusk', 'night'];
 const WEATHERS: Weather[] = ['clear', 'mist', 'rain', 'ashwind', 'storm'];
@@ -728,8 +729,8 @@ function customAction(state: GameState, text: string, rng: () => number): void {
 }
 
 function loopCount(state: GameState): number {
-  const n = state.flags.capella_loops;
-  return typeof n === 'number' ? n : Number(n) || 0;
+  const fromState = Number(state.flags.capella_loops) || 0;
+  return Math.max(fromState, getCapellaLoops());
 }
 
 export function resolveAction(state: GameState, input: ActionInput): GameState {
@@ -787,12 +788,15 @@ export function resolveAction(state: GameState, input: ActionInput): GameState {
     next.flags.crushed_by_capella = false;
     next.flags.capella_phase = 0;
     next.flags.crush_unlock_at = 0;
+    next.flags.between_toes = false;
     next.turns = 0;
     next.encounter = null;
     next.hp = next.maxHp;
     next.stress = 0;
     next.locationId = 'hollowmere';
     next.log = [];
+    next.flags.capella_loops = loopCount(next);
+    setCapellaLoops(Number(next.flags.capella_loops) || 0);
 
     const nextDoom = doomChoicesForLoops(loopCount(next));
     if (nextDoom <= 0) {
@@ -902,7 +906,9 @@ function triggerCapellaCrush(
   state.encounter = null;
   state.flags.crushed_by_capella = true;
   state.flags.capella_phase = 99;
-  state.flags.capella_loops = loops + 1;
+  const nextLoops = loops + 1;
+  state.flags.capella_loops = nextLoops;
+  setCapellaLoops(nextLoops);
   state.flags.crush_unlock_at = Date.now() + crushLockMs(loops);
   state.flags.between_toes = Boolean(opts.betweenToes);
   state.hp = 0;
@@ -937,7 +943,15 @@ function triggerCapellaCrush(
 }
 
 export function beginPlay(state: GameState): GameState {
-  return composeScene(structuredClone(state), true);
+  const next = structuredClone(state);
+  next.flags.capella_loops = loopCount(next);
+  const doom = doomChoicesForLoops(loopCount(next));
+  if (doom <= 0) {
+    const rng = createRng(hashSeed(next.seed, 'toes', Date.now()));
+    triggerCapellaCrush(next, rng, { betweenToes: true });
+    return next;
+  }
+  return composeScene(next, true);
 }
 
 // Kept for content expansion; Capella route currently short-circuits most of these.

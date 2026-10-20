@@ -1,5 +1,7 @@
 import { CLASSES, type ClassDef } from '../content/classes';
+import { doomChoicesForLoops } from '../content/capella';
 import { createRng, pick } from './rng';
+import { getCapellaLoops } from './save';
 import type { GameState, TimeOfDay, Weather } from './types';
 import { pushLog, uid } from './helpers';
 
@@ -35,7 +37,9 @@ export function createNewGame(
     locationId: 'hollowmere',
     inventory: classDef.gear.map((g) => ({ ...g })),
     npcs: {},
-    flags: {},
+    flags: {
+      capella_loops: getCapellaLoops(),
+    },
     quests: {},
     clocks: {
       wolf_pressure: 1,
@@ -80,10 +84,21 @@ export function createNewGame(
     kind: 'narration',
     text: pick(rng, openings),
   });
+  const loops = getCapellaLoops();
+  const doom = doomChoicesForLoops(loops);
   pushLog(state, {
     kind: 'narration',
     text: `You are ${state.playerName}, a ${state.playerClass}. Coin in pocket, road behind you, and a town that could use someone who finishes what they start.`,
   });
+  if (loops > 0) {
+    pushLog(state, {
+      kind: 'system',
+      text:
+        doom <= 0
+          ? 'Capella does not bother with roads anymore.'
+          : `The Marches feel smaller. Capella is ${doom} choice${doom === 1 ? '' : 's'} away.`,
+    });
+  }
 
   return state;
 }

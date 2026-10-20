@@ -5,7 +5,14 @@ import { TitleScreen } from './components/TitleScreen';
 import type { ClassDef } from './content/classes';
 import { beginPlay, resolveAction } from './engine/actions';
 import { createNewGame } from './engine/create';
-import { clearSave, hasSave, loadGame, saveGame } from './engine/save';
+import {
+  capellaDoomRemaining,
+  clearSave,
+  hasSave,
+  loadGame,
+  saveGame,
+  tightenCapellaLoop,
+} from './engine/save';
 import type { GameState, Screen } from './engine/types';
 import './styles/app.scss';
 
@@ -89,9 +96,22 @@ export default function App() {
                 return;
               }
             }
-            saveGame(state);
+            // Leaving for Title always pulls Capella closer
+            const loops = tightenCapellaLoop();
+            const doom = capellaDoomRemaining();
+            const next = {
+              ...state,
+              flags: { ...state.flags, capella_loops: loops },
+            };
+            saveGame(next);
+            setState(next);
             setSaveExists(true);
             setScreen('title');
+            setToast(
+              doom <= 0
+                ? 'Next time: no road. Between her toes.'
+                : `Capella closer — ${doom} choice${doom === 1 ? '' : 's'} next run.`,
+            );
           }}
         />
       )}
