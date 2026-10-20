@@ -9,6 +9,7 @@ import type { Attribute, Choice, ChoiceGroup, GameState } from '../engine/types'
 
 interface Props {
   state: GameState;
+  thinking?: boolean;
   onChoice: (choiceId: string) => void;
   onFreeText: (text: string) => void;
   onSave: () => void;
@@ -34,7 +35,7 @@ function ytAudioEmbed(id: string) {
   return `https://www.youtube.com/embed/${id}?autoplay=1&mute=0&controls=0&loop=1&playlist=${id}&rel=0&modestbranding=1&playsinline=1`;
 }
 
-export function PlayScreen({ state, onChoice, onFreeText, onSave, onTitle }: Props) {
+export function PlayScreen({ state, thinking = false, onChoice, onFreeText, onSave, onTitle }: Props) {
   const [text, setText] = useState('');
   const [openTravelFor, setOpenTravelFor] = useState<string | null>(null);
   const [openPaceFor, setOpenPaceFor] = useState<string | null>(null);
@@ -216,7 +217,13 @@ export function PlayScreen({ state, onChoice, onFreeText, onSave, onTitle }: Pro
           ))}
         </div>
 
-        <div className="action-dock">
+        {thinking && (
+          <p className="ai-thinking" role="status">
+            Capella is rewriting the scene…
+          </p>
+        )}
+
+        <div className={`action-dock${thinking ? ' is-locked' : ''}`}>
           {crushed ? (
             <>
               <div className="choice-chips">

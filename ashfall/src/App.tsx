@@ -1,10 +1,16 @@
 import { useEffect, useState } from 'react';
+import { AiSettings } from './components/AiSettings';
 import { CharacterCreate } from './components/CharacterCreate';
 import { PlayScreen } from './components/PlayScreen';
 import { TitleScreen } from './components/TitleScreen';
 import type { ClassDef } from './content/classes';
 import { beginPlay, resolveAction } from './engine/actions';
+import {
+  generateCapellaCrushTaunt,
+  weaveCapellaTurn,
+} from './engine/capellaAi';
 import { createNewGame } from './engine/create';
+import { pushLog } from './engine/helpers';
 import {
   capellaDoomRemaining,
   clearSave,
@@ -21,14 +27,15 @@ export default function App() {
   const [state, setState] = useState<GameState | null>(null);
   const [saveExists, setSaveExists] = useState(() => hasSave());
   const [toast, setToast] = useState<string | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [thinking, setThinking] = useState(false);
 
   useEffect(() => {
     if (!toast) return;
-    const t = window.setTimeout(() => setToast(null), 2200);
+    const t = window.setTimeout(() => setToast(null), 2800);
     return () => window.clearTimeout(t);
   }, [toast]);
 
-  // Autosave while playing
   useEffect(() => {
     if (screen !== 'play' || !state) return;
     saveGame(state);
@@ -40,6 +47,9 @@ export default function App() {
     setState(game);
     setScreen('play');
     setSaveExists(true);
+    if (game.flags.crushed_by_capella) {
+      void adornCrush(game, 'toes');
+    }
   }
 
   function continueGame() {
@@ -52,14 +62,50 @@ export default function App() {
     setScreen('play');
   }
 
-  function act(choiceId: string) {
-    if (!state) return;
-    setState(resolveAction(state, { choiceId }));
+  async function adornCrush(s: GameState, kind: 'struggle' | 'crush' | 'toes') {
+    setThinking(true);
+    try {
+      const line = await generateCapellaCrushTaunt(s, kind);
+      const next = structuredClone(s);
+      pushLog(next, { kind: 'narration', text: `**Capella:** ${line}` });
+      setState(next);
+    } finally {
+      setThinking(false);
+    }
   }
 
-  function free(text: string) {
-    if (!state) return;
-    setState(resolveAction(state, { freeText: text }));
+  async function runTurn(input: { choiceId?: string; freeText?: string }, labelHint?: string) {
+    if (!state || thinking) return;
+    setThinking(true);
+    try {
+      let next = resolveAction(state, input);
+      setState(next);
+
+      const label =
+        labelHint ||
+        input.freeText ||
+        state.choices.find((c) => c.id === input.choiceId)?.label ||
+        'something foolish';
+
+      if (next.flags.crushed_by_capella) {
+        const struggle = ['capella_struggle', 'capella_beg', 'capella_crawl', 'capella_escape'].includes(
+          input.choiceId ?? '',
+        );
+        const justCrushed =
+          !state.flags.crushed_by_capella && Boolean(next.flags.crushed_by_capella);
+        if (struggle) await adornCrush(next, 'struggle');
+        else if (justCrushed) {
+          await adornCrush(next, next.flags.between_toes ? 'toes' : 'crush');
+        }
+        return;
+      }
+
+      // Expansive AI story + Capella shrink interrupt reacting to this character
+      next = await weaveCapellaTurn(next, label);
+      setState(next);
+    } finally {
+      setThinking(false);
+    }
   }
 
   function manualSave() {
@@ -76,6 +122,7 @@ export default function App() {
           hasSave={saveExists}
           onNew={() => setScreen('create')}
           onContinue={continueGame}
+          onOpenAi={() => setAiOpen(true)}
         />
       )}
       {screen === 'create' && (
@@ -84,19 +131,22 @@ export default function App() {
       {screen === 'play' && state && (
         <PlayScreen
           state={state}
-          onChoice={act}
-          onFreeText={free}
+          thinking={thinking}
+          onChoice={(id) => {
+            const label = state.choices.find((c) => c.id === id)?.label;
+            void runTurn({ choiceId: id }, label);
+          }}
+          onFreeText={(text) => void runTurn({ freeText: text }, text)}
           onSave={manualSave}
           onTitle={() => {
             if (state.flags.crushed_by_capella) {
               const unlockAt = Number(state.flags.crush_unlock_at) || 0;
               if (Date.now() < unlockAt) {
-                setState(resolveAction(state, { choiceId: 'capella_escape' }));
+                void runTurn({ choiceId: 'capella_escape' }, 'Escape');
                 setToast('Capella sealed the exit.');
                 return;
               }
             }
-            // Leaving for Title always pulls Capella closer
             const loops = tightenCapellaLoop();
             const doom = capellaDoomRemaining();
             const next = {
@@ -117,6 +167,7 @@ export default function App() {
           }}
         />
       )}
+      <AiSettings open={aiOpen} onClose={() => setAiOpen(false)} />
       {toast && (
         <div className="toast" role="status">
           {toast}

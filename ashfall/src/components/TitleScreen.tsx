@@ -4,9 +4,10 @@ interface Props {
   hasSave: boolean;
   onNew: () => void;
   onContinue: () => void;
+  onOpenAi: () => void;
 }
 
-export function TitleScreen({ hasSave, onNew, onContinue }: Props) {
+export function TitleScreen({ hasSave, onNew, onContinue, onOpenAi }: Props) {
   const footZoom = hasFootTitleZoom();
 
   function begin() {
@@ -41,7 +42,7 @@ export function TitleScreen({ hasSave, onNew, onContinue }: Props) {
         <p className="title-screen__lede">
           {footZoom
             ? 'No horizon left — only sole, toes, and the dark between them.'
-            : 'A long road through the Marches. A dungeon master made of rules, memory, and dice — no AI required. You play. It keeps the world turning.'}
+            : 'A long road through the Marches — until Mama notices. Story expands. Capella interrupts. Love means shrinking.'}
         </p>
         <div className="title-actions">
           <button type="button" className="btn btn--primary" onClick={begin}>
@@ -52,6 +53,9 @@ export function TitleScreen({ hasSave, onNew, onContinue }: Props) {
               Continue
             </button>
           )}
+          <button type="button" className="btn btn--ghost" onClick={onOpenAi}>
+            Capella AI…
+          </button>
         </div>
       </div>
     </section>

@@ -5,7 +5,6 @@ import {
   CAPELLA_APPROACH,
   CAPELLA_BETWEEN_TOES,
   CAPELLA_CRUSH,
-  CAPELLA_FORESHADOW,
   CAPELLA_SHRINK,
   CAPELLA_STEP,
   CAPELLA_STRUGGLE,
@@ -865,10 +864,7 @@ export function resolveAction(state: GameState, input: ActionInput): GameState {
   if (doomAt <= 0 || next.turns >= doomAt) {
     triggerCapellaCrush(next, rng, { betweenToes: doomAt <= 0 });
   } else {
-    // First loop: zero foreshadowing. Later loops: Capella teases.
-    if (loops > 0) {
-      pushLog(next, { kind: 'narration', text: pick(rng, CAPELLA_FORESHADOW) });
-    }
+    // Capella AI dialogue is woven in App after this — keep scene choices ready
     next.flags.capella_phase = next.turns;
     next = composeScene(next, true);
   }
