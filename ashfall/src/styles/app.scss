@@ -597,6 +597,35 @@
   font-size: 0.92rem;
 }
 
+.crush-stage {
+  margin: 0 0 1rem;
+  border: 1px solid rgba(232, 160, 74, 0.35);
+  background: rgba(7, 18, 16, 0.85);
+  overflow: hidden;
+  animation: rise 0.5s var(--ease);
+}
+
+.crush-gif {
+  display: block;
+  width: 100%;
+  max-height: min(55vh, 520px);
+  object-fit: contain;
+  background: #050808;
+}
+
+.crush-caption {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  color: var(--amber);
+}
+
+.play--crushed .play-main {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
 @media (max-width: 899px) {
   .sheet-toggle {
     display: inline-flex;

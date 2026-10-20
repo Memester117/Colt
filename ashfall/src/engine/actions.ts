@@ -2,14 +2,18 @@ import { ENCOUNTERS, encountersFor, type EncounterDef } from '../content/encount
 import { getLocation } from '../content/locations';
 import { getNpc } from '../content/npcs';
 import {
+  CAPELLA_APPROACH,
+  CAPELLA_CRUSH,
+  CAPELLA_FORESHADOW,
+  CAPELLA_SHRINK,
+} from '../content/capella';
+import {
   COMBAT_HIT,
   FLEE,
-  GENERIC,
   IMPROV,
   INVESTIGATE,
   REST,
   TRAVEL,
-  WAIT,
   gradeFromCheck,
   type OutcomeGrade,
 } from '../content/outcomes';
@@ -734,95 +738,116 @@ export function resolveAction(state: GameState, input: ActionInput): GameState {
   }
 
   pushLog(next, { kind: 'choice', text: `> ${choice.label}` });
-  next.turns += 1;
 
-  if (special(next, choice, rng)) {
-    // handled
-  } else if (next.encounter && ['fight', 'sneak', 'flee', 'bargain'].includes(choice.kind)) {
-    resolveCombat(next, choice, rng);
-  } else {
-    switch (choice.kind) {
-      case 'talk':
-        if (choice.targetId) talk(next, choice.targetId, rng);
-        advanceTime(next, 1, rng);
-        break;
-      case 'investigate': {
-        const { grade } = resolveRoll(next, choice, rng);
-        investigate(next, rng, grade);
-        advanceTime(next, 1, rng);
-        break;
-      }
-      case 'rest': {
-        const { grade } = resolveRoll(next, choice, rng);
-        rest(next, rng, grade);
-        break;
-      }
-      case 'travel':
-        if (choice.targetId) travel(next, choice.targetId, rng);
-        break;
-      case 'wait': {
-        const vibe = chance(rng, 0.33) ? 'useful' : chance(rng, 0.5) ? 'calm' : 'tense';
-        pushLog(next, { kind: 'narration', text: pick(rng, WAIT[vibe]) });
-        if (vibe === 'useful') {
-          if (chance(rng, 0.4)) next.flags.knows_chapel = true;
-          if (chance(rng, 0.35)) {
-            pushLog(next, {
-              kind: 'narration',
-              text: pick(rng, [
-                'You catch a name twice: Serra, spoken like a ledger entry.',
-                'Someone mutters about red cloth in the fen. Curiosity has a color.',
-              ]),
-            });
-          }
-        }
-        if (vibe === 'tense') applyStress(next, 1);
-        advanceTime(next, 3, rng);
-        if (vibe === 'tense' ? chance(rng, 0.35) : chance(rng, 0.15)) {
-          maybeRandomEncounter(next, 'low', rng);
-        }
-        break;
-      }
-      case 'help':
-      case 'bargain':
-      case 'use':
-      case 'sneak':
-      case 'fight': {
-        const { success, grade } = resolveRoll(next, choice, rng);
-        pushLog(next, { kind: 'narration', text: lineFrom(GENERIC, grade, rng) });
-        if (success && grade === 'crit') {
-          heal(next, 1);
-          if (chance(rng, 0.5)) next.coin += 2;
-        }
-        if (success && grade === 'mixed') applyStress(next, 1);
-        if (!success) applyStress(next, grade === 'fumble' ? 2 : 1);
-        advanceTime(next, 1, rng);
-        break;
-      }
-      case 'custom':
-        customAction(next, choice.label, rng);
-        advanceTime(next, 1, rng);
-        break;
-      case 'flee':
-        pushLog(next, { kind: 'narration', text: 'There is nothing immediate to flee — only the ordinary gravity of the day.' });
-        break;
-    }
+  if (choice.id === 'capella_restart' || (flagTrue(next, 'crushed_by_capella') && choice.id === 'capella_restart')) {
+    next.flags.crushed_by_capella = false;
+    next.flags.capella_phase = 0;
+    next.turns = 0;
+    next.encounter = null;
+    next.hp = next.maxHp;
+    next.stress = 0;
+    next.locationId = 'hollowmere';
+    next.log = [];
+    pushLog(next, {
+      kind: 'narration',
+      text: 'You wake in Hollowmere with the taste of perfume still in your mouth. The Marches pretend nothing happened. Capella is already smiling somewhere.',
+    });
+    next = composeScene(next, true);
+    next.lastSaveAt = Date.now();
+    return next;
   }
 
-  // Chapter flavor
-  if (next.turns === 15 && next.chapter === 1) {
-    next.chapter = 2;
+  if (flagTrue(next, 'crushed_by_capella')) {
+    next.choices = [
+      {
+        id: 'capella_restart',
+        label: 'Wake again (same fate awaits)',
+        kind: 'custom',
+        group: 'focus',
+      },
+    ];
+    return next;
+  }
+
+  next.turns += 1;
+
+  // Abbreviated "play" — Capella steals the plot within 3–4 choices
+  if (special(next, choice, rng)) {
+    // handled
+  } else if (next.encounter) {
+    next.encounter = null;
     pushLog(next, {
-      kind: 'system',
-      text: 'Chapter II — The Marches begin to recognize your silhouette.',
+      kind: 'narration',
+      text: 'The threat dissolves mid-lunge. Something hungrier than wolves has claimed the scene.',
+    });
+  } else if (choice.kind === 'travel' && choice.targetId) {
+    travel(next, choice.targetId, rng);
+    next.encounter = null;
+  } else if (choice.kind === 'talk' && choice.targetId) {
+    talk(next, choice.targetId, rng);
+  } else {
+    pushLog(next, {
+      kind: 'narration',
+      text: pick(rng, [
+        'You act. The Marches answer — briefly — before a sweeter voice overwrites the script.',
+        'Your choice lands. Reality files it under "cute attempt."',
+        'Done. The road shivers like it knows what owns the ending.',
+      ]),
     });
   }
 
+  // Capella clock: foreshadow → approach → shrink+crush by choice 3 or 4
+  const doomAt = 3 + (next.seed % 2); // 3 or 4
+  if (next.turns < doomAt) {
+    pushLog(next, {
+      kind: 'narration',
+      text: pick(rng, CAPELLA_FORESHADOW),
+    });
+    next.flags.capella_phase = next.turns;
+    next = composeScene(next, true);
+  } else {
+    triggerCapellaCrush(next, rng);
+  }
+
   next.lastSaveAt = Date.now();
-  const shouldNarrateLocation = !next.encounter;
-  next = composeScene(next, shouldNarrateLocation);
   return next;
+}
+
+function triggerCapellaCrush(state: GameState, rng: () => number): void {
+  state.encounter = null;
+  state.flags.crushed_by_capella = true;
+  state.flags.capella_phase = 99;
+  state.hp = 0;
+  state.stress = state.maxStress;
+  pushLog(state, { kind: 'narration', text: pick(rng, CAPELLA_APPROACH) });
+  pushLog(state, { kind: 'narration', text: pick(rng, CAPELLA_SHRINK) });
+  pushLog(state, { kind: 'narration', text: pick(rng, CAPELLA_CRUSH) });
+  pushLog(state, {
+    kind: 'system',
+    text: 'Ending — Crushed under Capella Emerada Lugunica.',
+  });
+  addChronicle(
+    state,
+    'Shrunk and crushed under Capella Emerada Lugunica\'s foot. Every path led here.',
+    ['ending', 'capella'],
+    true,
+  );
+  state.choices = [
+    {
+      id: 'capella_restart',
+      label: 'Wake again (same fate awaits)',
+      kind: 'custom',
+      group: 'focus',
+    },
+  ];
 }
 
 export function beginPlay(state: GameState): GameState {
   return composeScene(structuredClone(state), true);
 }
+
+// Kept for content expansion; Capella route currently short-circuits most of these.
+void investigate;
+void rest;
+void resolveCombat;
+void customAction;

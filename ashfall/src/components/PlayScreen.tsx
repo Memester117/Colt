@@ -53,9 +53,10 @@ export function PlayScreen({ state, onChoice, onFreeText, onSave, onTitle }: Pro
   const activeQuests = Object.values(state.quests).filter((q) => !q.completed);
   const doneQuests = Object.values(state.quests).filter((q) => q.completed);
   const inCombat = Boolean(state.encounter);
+  const crushed = Boolean(state.flags.crushed_by_capella);
 
   return (
-    <div className="play">
+    <div className={`play${crushed ? ' play--crushed' : ''}`}>
       <aside className={`play-side-left${sheetOpen ? ' is-open' : ''}`}>
         <div className="panel">
           <h2>{state.playerName}</h2>
@@ -107,9 +108,11 @@ export function PlayScreen({ state, onChoice, onFreeText, onSave, onTitle }: Pro
       <main className="play-main">
         <header className="play-header">
           <div>
-            <h1>{loc.name}</h1>
+            <h1>{crushed ? 'Under Capella' : loc.name}</h1>
             <div className="play-meta">
-              {timeLabel(state.time)} · {weatherLabel(state.weather)} · {loc.region}
+              {crushed
+                ? 'Authority of Lust · ending'
+                : `${timeLabel(state.time)} · ${weatherLabel(state.weather)} · ${loc.region}`}
             </div>
           </div>
           <button
@@ -121,9 +124,26 @@ export function PlayScreen({ state, onChoice, onFreeText, onSave, onTitle }: Pro
           </button>
         </header>
 
-        {state.encounter && (
+        {state.encounter && !crushed && (
           <div className="encounter-banner">
             {state.encounter.name} · {state.encounter.hp}/{state.encounter.maxHp}
+          </div>
+        )}
+
+        {crushed && (
+          <div className="crush-stage">
+            <video
+              className="crush-gif"
+              src="/capella-crush.mp4"
+              poster="/capella-crush.jpg"
+              autoPlay
+              loop
+              muted
+              playsInline
+            />
+            <p className="crush-caption">
+              Capella Emerada Lugunica — shrunk and crushed underfoot.
+            </p>
           </div>
         )}
 
