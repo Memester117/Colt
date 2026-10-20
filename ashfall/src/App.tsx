@@ -63,15 +63,19 @@ export default function App() {
     setScreen('play');
   }
 
-  async function adornCrush(s: GameState, kind: 'struggle' | 'crush' | 'toes') {
-    setThinking(true);
+  async function adornCrush(s: GameState, kind: 'struggle' | 'crush' | 'toes' | 'wiggle') {
+    const silent = kind === 'wiggle';
+    if (!silent) setThinking(true);
     try {
-      const line = await generateCapellaCrushTaunt(s, kind);
-      const next = structuredClone(s);
-      pushLog(next, { kind: 'narration', text: `**Capella:** ${line}` });
-      setState(next);
+      const { text } = await generateCapellaCrushTaunt(s, kind);
+      setState((prev) => {
+        const base = prev ?? s;
+        const next = structuredClone(base);
+        pushLog(next, { kind: 'narration', text: `**Capella:** ${text}` });
+        return next;
+      });
     } finally {
-      setThinking(false);
+      if (!silent) setThinking(false);
     }
   }
 
@@ -139,6 +143,10 @@ export default function App() {
         <PlayScreen
           state={state}
           thinking={thinking}
+          onToeWiggle={() => {
+            if (!state.flags.crushed_by_capella || thinking) return;
+            void adornCrush(state, 'wiggle');
+          }}
           onChoice={(id) => {
             const label = state.choices.find((c) => c.id === id)?.label;
             void runTurn({ choiceId: id }, label);

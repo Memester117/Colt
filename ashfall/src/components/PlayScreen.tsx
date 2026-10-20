@@ -6,6 +6,7 @@ import { startCrushAudio, stopCrushAudio } from '../engine/crushAudio';
 import { ATTR_LABEL } from '../engine/dice';
 import { timeLabel, weatherLabel } from '../engine/create';
 import type { Attribute, Choice, ChoiceGroup, GameState } from '../engine/types';
+import { TokenBurnCounter } from './TokenBurnCounter';
 
 interface Props {
   state: GameState;
@@ -14,6 +15,8 @@ interface Props {
   onFreeText: (text: string) => void;
   onSave: () => void;
   onTitle: () => void;
+  /** Idle toe-wiggle burn while the crush gif loops. */
+  onToeWiggle?: () => void;
 }
 
 function renderText(text: string) {
@@ -35,13 +38,24 @@ function ytAudioEmbed(id: string) {
   return `https://www.youtube.com/embed/${id}?autoplay=1&mute=0&controls=0&loop=1&playlist=${id}&rel=0&modestbranding=1&playsinline=1`;
 }
 
-export function PlayScreen({ state, thinking = false, onChoice, onFreeText, onSave, onTitle }: Props) {
+export function PlayScreen({
+  state,
+  thinking = false,
+  onChoice,
+  onFreeText,
+  onSave,
+  onTitle,
+  onToeWiggle,
+}: Props) {
   const [text, setText] = useState('');
   const [openTravelFor, setOpenTravelFor] = useState<string | null>(null);
   const [openPaceFor, setOpenPaceFor] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const logRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const lastWiggleAt = useRef(0);
+  const wiggleBusy = useRef(false);
   const loc = getLocation(state.locationId);
   const sceneKey = `${state.locationId}:${state.encounter?.id ?? 'x'}:${state.turns}`;
   const showTravel = openTravelFor === sceneKey;
@@ -78,6 +92,40 @@ export function PlayScreen({ state, thinking = false, onChoice, onFreeText, onSa
     void startCrushAudio();
     return () => stopCrushAudio();
   }, [crushed]);
+
+  // Each toe flex / loop of the crush gif → idle Capella taunt (burns tokens).
+  useEffect(() => {
+    if (!crushed || !onToeWiggle) return;
+    const el = videoRef.current;
+    if (!el) return;
+
+    const fire = () => {
+      const t = Date.now();
+      if (wiggleBusy.current || thinking) return;
+      if (t - lastWiggleAt.current < 4500) return;
+      lastWiggleAt.current = t;
+      wiggleBusy.current = true;
+      onToeWiggle();
+      window.setTimeout(() => {
+        wiggleBusy.current = false;
+      }, 1200);
+    };
+
+    const onTime = () => {
+      // Mid-flex window in the crush loop (~40–55% through)
+      const d = el.duration;
+      if (!d || !Number.isFinite(d)) return;
+      const p = el.currentTime / d;
+      if (p > 0.4 && p < 0.55) fire();
+    };
+
+    el.addEventListener('timeupdate', onTime);
+    el.addEventListener('ended', fire);
+    return () => {
+      el.removeEventListener('timeupdate', onTime);
+      el.removeEventListener('ended', fire);
+    };
+  }, [crushed, onToeWiggle, thinking]);
 
   const attrs = Object.entries(state.attributes) as Array<[Attribute, number]>;
   const activeQuests = Object.values(state.quests).filter((q) => !q.completed);
@@ -155,6 +203,7 @@ export function PlayScreen({ state, thinking = false, onChoice, onFreeText, onSa
                   : 'shrunk · then stepped on'
                 : `${timeLabel(state.time)} · ${weatherLabel(state.weather)} · ${loc.region}`}
             </div>
+            {!crushed && <TokenBurnCounter />}
           </div>
           {!crushed && (
             <button
@@ -187,6 +236,7 @@ export function PlayScreen({ state, thinking = false, onChoice, onFreeText, onSa
               ))}
             </div>
             <video
+              ref={videoRef}
               className="crush-gif"
               src="/capella-crush.mp4"
               poster="/capella-crush.jpg"
@@ -195,6 +245,7 @@ export function PlayScreen({ state, thinking = false, onChoice, onFreeText, onSa
               muted
               playsInline
             />
+            <TokenBurnCounter compact />
             <p className="crush-caption">
               {betweenToes
                 ? 'Capella Emerada Lugunica — already bug-sized between her toes.'

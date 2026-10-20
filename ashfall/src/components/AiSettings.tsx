@@ -26,7 +26,8 @@ export function AiSettings({ open, onClose }: Props) {
         <h2>Capella AI</h2>
         <p>
           Paste an OpenAI-compatible key for live Capella dialogue. Leave empty to use the built-in
-          generative Capella voice (still reacts to your character).
+          generative Capella voice (still reacts to your character). With a key, every scene beat and
+          each idle toe-wiggle during the crush burns your API tokens — watch the counter climb.
         </p>
         <div className="field">
           <label htmlFor="llm-key">API key</label>
