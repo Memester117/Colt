@@ -14,8 +14,8 @@ export function TitleScreen({ hasSave, onNew, onContinue }: Props) {
           Ash<em>fall</em>
         </h1>
         <p className="title-screen__lede">
-          A short road through the Marches. Every path ends the same: Capella Emerada Lugunica
-          notices you, shrinks you, and finishes the story underfoot.
+          A long road through the Marches. A dungeon master made of rules, memory, and dice —
+          no AI required. You play. It keeps the world turning.
         </p>
         <div className="title-actions">
           <button type="button" className="btn btn--primary" onClick={onNew}>

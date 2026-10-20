@@ -82,11 +82,7 @@ export function createNewGame(
   });
   pushLog(state, {
     kind: 'narration',
-    text: `You are ${state.playerName}, a ${state.playerClass}. Coin in pocket, road behind you — and a sweet, wrong perfume already on the wind. Something named Capella has noticed the Marches.`,
-  });
-  pushLog(state, {
-    kind: 'system',
-    text: 'Every road ends the same: shrunk beneath Capella Emerada Lugunica.',
+    text: `You are ${state.playerName}, a ${state.playerClass}. Coin in pocket, road behind you, and a town that could use someone who finishes what they start.`,
   });
 
   return state;

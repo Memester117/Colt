@@ -81,6 +81,14 @@ export default function App() {
           onFreeText={free}
           onSave={manualSave}
           onTitle={() => {
+            if (state.flags.crushed_by_capella) {
+              const unlockAt = Number(state.flags.crush_unlock_at) || 0;
+              if (Date.now() < unlockAt) {
+                setState(resolveAction(state, { choiceId: 'capella_escape' }));
+                setToast('Capella sealed the exit.');
+                return;
+              }
+            }
             saveGame(state);
             setSaveExists(true);
             setScreen('title');

@@ -3,9 +3,14 @@ import { getLocation } from '../content/locations';
 import { getNpc } from '../content/npcs';
 import {
   CAPELLA_APPROACH,
+  CAPELLA_BETWEEN_TOES,
   CAPELLA_CRUSH,
   CAPELLA_FORESHADOW,
   CAPELLA_SHRINK,
+  CAPELLA_STEP,
+  CAPELLA_STRUGGLE,
+  crushLockMs,
+  doomChoicesForLoops,
 } from '../content/capella';
 import {
   COMBAT_HIT,
@@ -722,9 +727,15 @@ function customAction(state: GameState, text: string, rng: () => number): void {
   }
 }
 
+function loopCount(state: GameState): number {
+  const n = state.flags.capella_loops;
+  return typeof n === 'number' ? n : Number(n) || 0;
+}
+
 export function resolveAction(state: GameState, input: ActionInput): GameState {
   let next = structuredClone(state);
   const rng = createRng(hashSeed(next.seed, next.turns, input.choiceId ?? input.freeText ?? 'x', next.day));
+  const loops = loopCount(next);
 
   let choice: Choice | null = null;
   if (input.choiceId) {
@@ -733,24 +744,70 @@ export function resolveAction(state: GameState, input: ActionInput): GameState {
     choice = parseFreeText(next, input.freeText);
   }
   if (!choice) {
+    if (flagTrue(next, 'crushed_by_capella')) {
+      pushLog(next, { kind: 'narration', text: pick(rng, CAPELLA_STRUGGLE) });
+      // Struggling extends the lock
+      const until = Number(next.flags.crush_unlock_at) || 0;
+      next.flags.crush_unlock_at = Math.max(until, Date.now()) + 12000;
+      return next;
+    }
     pushLog(next, { kind: 'system', text: 'Nothing comes of that. Try a clearer intent, or pick a path below.' });
     return composeScene(next, false);
   }
 
   pushLog(next, { kind: 'choice', text: `> ${choice.label}` });
 
-  if (choice.id === 'capella_restart' || (flagTrue(next, 'crushed_by_capella') && choice.id === 'capella_restart')) {
+  // Fake crush-screen buttons — never free you
+  if (
+    flagTrue(next, 'crushed_by_capella') &&
+    ['capella_struggle', 'capella_beg', 'capella_crawl', 'capella_escape'].includes(choice.id)
+  ) {
+    pushLog(next, { kind: 'narration', text: pick(rng, CAPELLA_STRUGGLE) });
+    const until = Number(next.flags.crush_unlock_at) || Date.now();
+    next.flags.crush_unlock_at = until + 18000;
+    next.choices = crushScreenChoices(false);
+    return next;
+  }
+
+  if (choice.id === 'capella_restart') {
+    const unlockAt = Number(next.flags.crush_unlock_at) || 0;
+    if (Date.now() < unlockAt) {
+      pushLog(next, {
+        kind: 'narration',
+        text: pick(rng, [
+          'Not yet. Capella is still enjoying the press.',
+          'The sole does not lift on request.',
+          '"Patience~" Capella croons. The lock holds.',
+        ]),
+      });
+      next.choices = crushScreenChoices(false);
+      return next;
+    }
+
     next.flags.crushed_by_capella = false;
     next.flags.capella_phase = 0;
+    next.flags.crush_unlock_at = 0;
     next.turns = 0;
     next.encounter = null;
     next.hp = next.maxHp;
     next.stress = 0;
     next.locationId = 'hollowmere';
     next.log = [];
+
+    const nextDoom = doomChoicesForLoops(loopCount(next));
+    if (nextDoom <= 0) {
+      // Spawn already bug-sized between her toes
+      triggerCapellaCrush(next, rng, { betweenToes: true });
+      next.lastSaveAt = Date.now();
+      return next;
+    }
+
     pushLog(next, {
       kind: 'narration',
-      text: 'You wake in Hollowmere with the taste of perfume still in your mouth. The Marches pretend nothing happened. Capella is already smiling somewhere.',
+      text:
+        loops === 0
+          ? 'You wake in Hollowmere. The Marches smell like rain again. Something feels unfinished.'
+          : `You wake in Hollowmere with perfume still in your mouth. Capella is closer this time — fewer steps until her foot. (${nextDoom} choice${nextDoom === 1 ? '' : 's'} left.)`,
     });
     next = composeScene(next, true);
     next.lastSaveAt = Date.now();
@@ -758,27 +815,22 @@ export function resolveAction(state: GameState, input: ActionInput): GameState {
   }
 
   if (flagTrue(next, 'crushed_by_capella')) {
-    next.choices = [
-      {
-        id: 'capella_restart',
-        label: 'Wake again (same fate awaits)',
-        kind: 'custom',
-        group: 'focus',
-      },
-    ];
+    next.choices = crushScreenChoices(Date.now() >= (Number(next.flags.crush_unlock_at) || 0));
     return next;
   }
 
   next.turns += 1;
 
-  // Abbreviated "play" — Capella steals the plot within 3–4 choices
   if (special(next, choice, rng)) {
     // handled
   } else if (next.encounter) {
     next.encounter = null;
     pushLog(next, {
       kind: 'narration',
-      text: 'The threat dissolves mid-lunge. Something hungrier than wolves has claimed the scene.',
+      text:
+        loops === 0
+          ? 'The threat breaks off suddenly — as if the scene lost interest in finishing the fight.'
+          : 'The threat dissolves mid-lunge. Something hungrier than wolves has claimed the scene.',
     });
   } else if (choice.kind === 'travel' && choice.targetId) {
     travel(next, choice.targetId, rng);
@@ -788,58 +840,100 @@ export function resolveAction(state: GameState, input: ActionInput): GameState {
   } else {
     pushLog(next, {
       kind: 'narration',
-      text: pick(rng, [
-        'You act. The Marches answer — briefly — before a sweeter voice overwrites the script.',
-        'Your choice lands. Reality files it under "cute attempt."',
-        'Done. The road shivers like it knows what owns the ending.',
-      ]),
+      text: pick(
+        rng,
+        loops === 0
+          ? [
+              'You act. The Marches answer in ordinary ways.',
+              'It works well enough. The day continues.',
+              'Done. Dust settles. Nothing seems wrong — yet.',
+            ]
+          : [
+              'You act. The Marches answer — briefly — before a sweeter voice overwrites the script.',
+              'Your choice lands. Reality files it under "cute attempt."',
+              'Done. The road shivers like it knows what owns the ending.',
+            ],
+      ),
     });
   }
 
-  // Capella clock: foreshadow → approach → shrink+crush by choice 3 or 4
-  const doomAt = 3 + (next.seed % 2); // 3 or 4
-  if (next.turns < doomAt) {
-    pushLog(next, {
-      kind: 'narration',
-      text: pick(rng, CAPELLA_FORESHADOW),
-    });
+  const doomAt = doomChoicesForLoops(loops);
+  if (doomAt <= 0 || next.turns >= doomAt) {
+    triggerCapellaCrush(next, rng, { betweenToes: doomAt <= 0 });
+  } else {
+    // First loop: zero foreshadowing. Later loops: Capella teases.
+    if (loops > 0) {
+      pushLog(next, { kind: 'narration', text: pick(rng, CAPELLA_FORESHADOW) });
+    }
     next.flags.capella_phase = next.turns;
     next = composeScene(next, true);
-  } else {
-    triggerCapellaCrush(next, rng);
   }
 
   next.lastSaveAt = Date.now();
   return next;
 }
 
-function triggerCapellaCrush(state: GameState, rng: () => number): void {
+function crushScreenChoices(unlocked: boolean): Choice[] {
+  const fake: Choice[] = [
+    { id: 'capella_struggle', label: 'Struggle', kind: 'custom', group: 'pace' },
+    { id: 'capella_beg', label: 'Beg', kind: 'custom', group: 'pace' },
+    { id: 'capella_crawl', label: 'Crawl away', kind: 'custom', group: 'pace' },
+    { id: 'capella_escape', label: 'Escape', kind: 'custom', group: 'pace' },
+  ];
+  if (!unlocked) return fake;
+  return [
+    ...fake,
+    {
+      id: 'capella_restart',
+      label: 'Wake again…?',
+      kind: 'custom',
+      group: 'focus',
+      hint: 'if she allows it',
+    },
+  ];
+}
+
+function triggerCapellaCrush(
+  state: GameState,
+  rng: () => number,
+  opts: { betweenToes?: boolean } = {},
+): void {
+  const loops = loopCount(state);
   state.encounter = null;
   state.flags.crushed_by_capella = true;
   state.flags.capella_phase = 99;
+  state.flags.capella_loops = loops + 1;
+  state.flags.crush_unlock_at = Date.now() + crushLockMs(loops);
+  state.flags.between_toes = Boolean(opts.betweenToes);
   state.hp = 0;
   state.stress = state.maxStress;
-  pushLog(state, { kind: 'narration', text: pick(rng, CAPELLA_APPROACH) });
-  pushLog(state, { kind: 'narration', text: pick(rng, CAPELLA_SHRINK) });
-  pushLog(state, { kind: 'narration', text: pick(rng, CAPELLA_CRUSH) });
+
+  if (opts.betweenToes) {
+    pushLog(state, { kind: 'narration', text: pick(rng, CAPELLA_BETWEEN_TOES) });
+    pushLog(state, { kind: 'narration', text: pick(rng, CAPELLA_STEP) });
+    pushLog(state, { kind: 'narration', text: pick(rng, CAPELLA_CRUSH) });
+  } else {
+    pushLog(state, { kind: 'narration', text: pick(rng, CAPELLA_APPROACH) });
+    pushLog(state, { kind: 'narration', text: pick(rng, CAPELLA_SHRINK) });
+    pushLog(state, { kind: 'narration', text: pick(rng, CAPELLA_STEP) });
+    pushLog(state, { kind: 'narration', text: pick(rng, CAPELLA_CRUSH) });
+  }
+
   pushLog(state, {
     kind: 'system',
-    text: 'Ending — Crushed under Capella Emerada Lugunica.',
+    text: opts.betweenToes
+      ? 'Ending — Bug-sized between Capella\'s toes.'
+      : 'Ending — Shrunk, then stepped on by Capella Emerada Lugunica.',
   });
   addChronicle(
     state,
-    'Shrunk and crushed under Capella Emerada Lugunica\'s foot. Every path led here.',
+    opts.betweenToes
+      ? 'Spawned between Capella\'s toes and crushed.'
+      : 'Shrunk by Capella, then crushed under her foot.',
     ['ending', 'capella'],
     true,
   );
-  state.choices = [
-    {
-      id: 'capella_restart',
-      label: 'Wake again (same fate awaits)',
-      kind: 'custom',
-      group: 'focus',
-    },
-  ];
+  state.choices = crushScreenChoices(false);
 }
 
 export function beginPlay(state: GameState): GameState {

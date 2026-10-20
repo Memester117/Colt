@@ -605,25 +605,75 @@
   animation: rise 0.5s var(--ease);
 }
 
+.crush-videos {
+  display: grid;
+  gap: 0.35rem;
+}
+
+@media (min-width: 720px) {
+  .crush-videos {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.crush-yt {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%;
+  background: #050808;
+}
+
+.crush-yt iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
 .crush-gif {
   display: block;
   width: 100%;
-  max-height: min(55vh, 520px);
+  max-height: min(40vh, 360px);
   object-fit: contain;
   background: #050808;
 }
 
 .crush-caption {
   margin: 0;
-  padding: 0.65rem 0.85rem;
+  padding: 0.65rem 0.85rem 0.25rem;
   font-family: var(--font-display);
   font-size: 1.15rem;
   color: var(--amber);
 }
 
+.crush-lock {
+  margin: 0;
+  padding: 0 0.85rem 0.75rem;
+  color: var(--ink-dim);
+  font-size: 0.9rem;
+}
+
+.crush-hint {
+  margin: 0.35rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.85rem;
+}
+
+.choice--tiny {
+  margin-top: 0.75rem;
+  opacity: 0.72;
+  font-size: 0.9rem;
+  border-style: dashed;
+}
+
 .play--crushed .play-main {
-  max-width: 720px;
+  max-width: 920px;
   margin: 0 auto;
+}
+
+.play--crushed {
+  grid-template-columns: 1fr;
 }
 
 @media (max-width: 899px) {
