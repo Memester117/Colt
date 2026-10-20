@@ -1,18 +1,33 @@
-import { clearFootTitleZoom, hasFootTitleZoom } from '../engine/save';
+import { useState } from 'react';
+import { clearFootTitleZoom, getCapellaLoops, hasFootTitleZoom } from '../engine/save';
 
 interface Props {
   hasSave: boolean;
   onNew: () => void;
   onContinue: () => void;
   onOpenAi: () => void;
+  onHardReset: () => void;
 }
 
-export function TitleScreen({ hasSave, onNew, onContinue, onOpenAi }: Props) {
-  const footZoom = hasFootTitleZoom();
+export function TitleScreen({ hasSave, onNew, onContinue, onOpenAi, onHardReset }: Props) {
+  const [footZoom, setFootZoom] = useState(() => hasFootTitleZoom());
+  const [confirmReset, setConfirmReset] = useState(false);
+  const loops = getCapellaLoops();
 
   function begin() {
     if (footZoom) clearFootTitleZoom();
+    setFootZoom(false);
     onNew();
+  }
+
+  function hardReset() {
+    if (!confirmReset) {
+      setConfirmReset(true);
+      return;
+    }
+    onHardReset();
+    setConfirmReset(false);
+    setFootZoom(false);
   }
 
   return (
@@ -44,6 +59,11 @@ export function TitleScreen({ hasSave, onNew, onContinue, onOpenAi }: Props) {
             ? 'No horizon left — only sole, toes, and the dark between them.'
             : 'A long road through the Marches — until Mama notices. Story expands. Capella interrupts. Love means shrinking.'}
         </p>
+        {loops > 0 && (
+          <p className="title-meta">
+            Capella grip: loop {loops} · hard-reset clears this
+          </p>
+        )}
         <div className="title-actions">
           <button type="button" className="btn btn--primary" onClick={begin}>
             Begin a journey
@@ -55,6 +75,14 @@ export function TitleScreen({ hasSave, onNew, onContinue, onOpenAi }: Props) {
           )}
           <button type="button" className="btn btn--ghost" onClick={onOpenAi}>
             Capella AI…
+          </button>
+          <button
+            type="button"
+            className={`btn${confirmReset ? ' btn--danger' : ' btn--ghost'}`}
+            onClick={hardReset}
+            onBlur={() => setConfirmReset(false)}
+          >
+            {confirmReset ? 'Confirm hard restart' : 'Hard restart'}
           </button>
         </div>
       </div>

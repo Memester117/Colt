@@ -78,6 +78,13 @@ export function clearSave(): void {
   localStorage.removeItem(KEY);
 }
 
+/** Wipe journey + Capella loop + foot-title arm. Does not clear LLM API settings. */
+export function hardResetProgress(): void {
+  localStorage.removeItem(KEY);
+  localStorage.removeItem(LOOPS_KEY);
+  localStorage.removeItem(FOOT_TITLE_KEY);
+}
+
 export function hasSave(): boolean {
   return Boolean(localStorage.getItem(KEY));
 }

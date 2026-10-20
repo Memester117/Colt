@@ -75,6 +75,24 @@
   gap: 0.75rem;
 }
 
+.title-meta {
+  margin: -0.75rem 0 1.25rem;
+  color: var(--ink-faint);
+  font-size: 0.85rem;
+}
+
+.btn--danger {
+  background: linear-gradient(180deg, #c45c4a, #8f3428);
+  border-color: transparent;
+  color: #fff8f5;
+  font-weight: 700;
+}
+
+.btn--danger:hover {
+  filter: brightness(1.06);
+  border-color: transparent;
+}
+
 /* Post between-toes: Title becomes a foot-only crop of the crush gif */
 .title-screen--foot {
   align-items: end;

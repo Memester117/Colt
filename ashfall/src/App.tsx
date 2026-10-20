@@ -14,6 +14,7 @@ import { pushLog } from './engine/helpers';
 import {
   capellaDoomRemaining,
   clearSave,
+  hardResetProgress,
   hasSave,
   loadGame,
   saveGame,
@@ -123,6 +124,12 @@ export default function App() {
           onNew={() => setScreen('create')}
           onContinue={continueGame}
           onOpenAi={() => setAiOpen(true)}
+          onHardReset={() => {
+            hardResetProgress();
+            setState(null);
+            setSaveExists(false);
+            setToast('Hard restart — Capella forgot you. For now.');
+          }}
         />
       )}
       {screen === 'create' && (
