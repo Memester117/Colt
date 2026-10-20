@@ -598,6 +598,7 @@
 }
 
 .crush-stage {
+  position: relative;
   margin: 0 0 1rem;
   border: 1px solid rgba(232, 160, 74, 0.35);
   background: rgba(7, 18, 16, 0.85);
@@ -605,30 +606,25 @@
   animation: rise 0.5s var(--ease);
 }
 
-.crush-videos {
-  display: grid;
-  gap: 0.35rem;
-}
-
-@media (min-width: 720px) {
-  .crush-videos {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-.crush-yt {
-  position: relative;
-  width: 100%;
-  padding-top: 56.25%;
-  background: #050808;
-}
-
-.crush-yt iframe {
+.crush-audio-beds {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.crush-audio-beds iframe {
   border: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.crush-audio-note {
+  margin: 0;
+  padding: 0 0.85rem 0.35rem;
+  color: var(--ink-faint);
+  font-size: 0.8rem;
 }
 
 .crush-gif {

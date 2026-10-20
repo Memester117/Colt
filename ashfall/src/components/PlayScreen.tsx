@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CAPELLA_YT } from '../content/capella';
 import { getLocation } from '../content/locations';
 import { QUESTS } from '../content/quests';
+import { startCrushAudio, stopCrushAudio } from '../engine/crushAudio';
 import { ATTR_LABEL } from '../engine/dice';
 import { timeLabel, weatherLabel } from '../engine/create';
 import type { Attribute, Choice, ChoiceGroup, GameState } from '../engine/types';
@@ -28,8 +29,9 @@ function groupOf(c: Choice): ChoiceGroup {
   return c.group ?? (c.kind === 'travel' ? 'travel' : c.kind === 'talk' ? 'people' : 'pace');
 }
 
-function ytEmbed(id: string) {
-  return `https://www.youtube.com/embed/${id}?autoplay=1&mute=1&controls=1&loop=1&playlist=${id}&rel=0&modestbranding=1&playsinline=1`;
+/** Official YouTube embed as background audio (not a downloaded MP3). */
+function ytAudioEmbed(id: string) {
+  return `https://www.youtube.com/embed/${id}?autoplay=1&mute=0&controls=0&loop=1&playlist=${id}&rel=0&modestbranding=1&playsinline=1`;
 }
 
 export function PlayScreen({ state, onChoice, onFreeText, onSave, onTitle }: Props) {
@@ -66,6 +68,15 @@ export function PlayScreen({ state, onChoice, onFreeText, onSave, onTitle }: Pro
     const t = window.setInterval(() => setNow(Date.now()), 500);
     return () => window.clearInterval(t);
   }, [crushed, unlockAt]);
+
+  useEffect(() => {
+    if (!crushed) {
+      stopCrushAudio();
+      return;
+    }
+    void startCrushAudio();
+    return () => stopCrushAudio();
+  }, [crushed]);
 
   const attrs = Object.entries(state.attributes) as Array<[Attribute, number]>;
   const activeQuests = Object.values(state.quests).filter((q) => !q.completed);
@@ -163,16 +174,15 @@ export function PlayScreen({ state, onChoice, onFreeText, onSave, onTitle }: Pro
 
         {crushed && (
           <div className="crush-stage">
-            <div className="crush-videos">
+            {/* YouTube as autoplaying audio beds — embeds only, not ripped MP3s */}
+            <div className="crush-audio-beds" aria-hidden="true">
               {CAPELLA_YT.map((id) => (
-                <div key={id} className="crush-yt">
-                  <iframe
-                    title={`Capella crush ${id}`}
-                    src={ytEmbed(id)}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                </div>
+                <iframe
+                  key={id}
+                  title={`Capella audio ${id}`}
+                  src={ytAudioEmbed(id)}
+                  allow="autoplay; encrypted-media"
+                />
               ))}
             </div>
             <video
@@ -189,6 +199,7 @@ export function PlayScreen({ state, onChoice, onFreeText, onSave, onTitle }: Pro
                 ? 'Capella Emerada Lugunica — already bug-sized between her toes.'
                 : 'Capella Emerada Lugunica — she shrinks you, then steps.'}
             </p>
+            <p className="crush-audio-note">Bone-crunch sting every 15s. YouTube audio beds under the sole.</p>
             <p className="crush-lock">
               {unlocked
                 ? 'Her foot eases… a crack of light. Maybe.'
