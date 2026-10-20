@@ -108,9 +108,11 @@ export default function App() {
             setSaveExists(true);
             setScreen('title');
             setToast(
-              doom <= 0
-                ? 'Next time: no road. Between her toes.'
-                : `Capella closer — ${doom} choice${doom === 1 ? '' : 's'} next run.`,
+              state.flags.between_toes
+                ? 'Title waits under her sole.'
+                : doom <= 0
+                  ? 'Next time: no road. Between her toes.'
+                  : `Capella closer — ${doom} choice${doom === 1 ? '' : 's'} next run.`,
             );
           }}
         />

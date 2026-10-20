@@ -40,7 +40,7 @@ import {
   setNpcAttitude,
 } from './helpers';
 import { parseFreeText } from './parse';
-import { getCapellaLoops, setCapellaLoops } from './save';
+import { armFootTitleZoom, getCapellaLoops, setCapellaLoops } from './save';
 
 const TIME_ORDER: TimeOfDay[] = ['dawn', 'day', 'dusk', 'night'];
 const WEATHERS: Weather[] = ['clear', 'mist', 'rain', 'ashwind', 'storm'];
@@ -915,6 +915,7 @@ function triggerCapellaCrush(
   state.stress = state.maxStress;
 
   if (opts.betweenToes) {
+    armFootTitleZoom();
     pushLog(state, { kind: 'narration', text: pick(rng, CAPELLA_BETWEEN_TOES) });
     pushLog(state, { kind: 'narration', text: pick(rng, CAPELLA_STEP) });
     pushLog(state, { kind: 'narration', text: pick(rng, CAPELLA_CRUSH) });

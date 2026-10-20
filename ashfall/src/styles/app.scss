@@ -75,6 +75,44 @@
   gap: 0.75rem;
 }
 
+/* Post between-toes: Title becomes a foot-only crop of the crush gif */
+.title-screen--foot {
+  align-items: end;
+  background: #0a0608;
+}
+
+.title-screen--foot .title-screen__content {
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.85);
+}
+
+.title-screen--foot .brand {
+  text-shadow: 0 0 28px rgba(0, 0, 0, 0.9);
+}
+
+.title-foot {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: #0a0608;
+}
+
+.title-foot__gif {
+  position: absolute;
+  /* Crop to the pink sole / toes — foot fills the frame */
+  width: 100%;
+  height: 100%;
+  object-fit: none;
+  object-position: 68% 92%;
+  transform: scale(2.65);
+  transform-origin: 72% 88%;
+  filter: saturate(1.05) contrast(1.05);
+}
+
+.title-screen--foot .title-screen__lede {
+  color: #e8c4b8;
+}
+
 /* ——— Shared controls ——— */
 .btn {
   appearance: none;

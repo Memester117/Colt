@@ -3,6 +3,7 @@ import type { GameState } from './types';
 
 const KEY = 'ashfall.save.v1';
 const LOOPS_KEY = 'ashfall.capella.loops.v1';
+const FOOT_TITLE_KEY = 'ashfall.capella.footTitle.v1';
 
 export function getCapellaLoops(): number {
   try {
@@ -27,6 +28,19 @@ export function tightenCapellaLoop(): number {
 
 export function capellaDoomRemaining(): number {
   return doomChoicesForLoops(getCapellaLoops());
+}
+
+/** After between-toes ending — next Title is a foot-only zoom of the crush gif. */
+export function armFootTitleZoom(): void {
+  localStorage.setItem(FOOT_TITLE_KEY, '1');
+}
+
+export function hasFootTitleZoom(): boolean {
+  return localStorage.getItem(FOOT_TITLE_KEY) === '1';
+}
+
+export function clearFootTitleZoom(): void {
+  localStorage.removeItem(FOOT_TITLE_KEY);
 }
 
 export function saveGame(state: GameState): void {
