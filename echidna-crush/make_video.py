@@ -213,25 +213,17 @@ def main() -> None:
     for i, fr in enumerate(frames):
         fr.save(OUT_DIR / f"frame_{i:04d}.png", optimize=True)
 
-    # Audio bed — compressed + maximized so it's clearly audible in players
+    # Quiet clean stereo SFX (no loudnorm / no noisy maximize)
     import numpy as np
-
-    wav_path = AUDIO_DIR / "crush_bed.wav"
-    stereo_path = AUDIO_DIR / "crush_bed_loud.wav"
-    bed = build_bed(duration, impact_time)
-    peak = float(np.max(np.abs(bed))) + 1e-9
-    bed = bed / peak
-    compressed = np.sign(bed) * np.power(np.abs(bed), 0.65)
-    peak2 = float(np.max(np.abs(compressed))) + 1e-9
-    compressed = compressed / peak2 * 0.89
-    write_wav(wav_path, compressed)
-
-    # Stereo WAV for better player compatibility
     import wave as _wave
 
-    delay = int(0.008 * 44100)
-    left = compressed
-    right = np.concatenate([np.zeros(delay), compressed[:-delay]]) if delay else compressed * 0.98
+    wav_path = AUDIO_DIR / "crush_bed.wav"
+    stereo_path = AUDIO_DIR / "crush_bed_stereo.wav"
+    bed = build_bed(duration, impact_time)
+    write_wav(wav_path, bed)
+
+    left = bed
+    right = bed * 0.96
     stereo = np.stack([left, right], axis=1)
     pcm = (np.clip(stereo, -1, 1) * 32767.0).astype(np.int16)
     with _wave.open(str(stereo_path), "wb") as wf:
@@ -239,7 +231,7 @@ def main() -> None:
         wf.setsampwidth(2)
         wf.setframerate(44100)
         wf.writeframes(pcm.tobytes())
-    print(f"SFX bed -> {stereo_path}")
+    print(f"SFX bed -> {stereo_path} (peak={float(np.max(np.abs(bed))):.3f})")
 
     raw_mp4 = VIDEO_DIR / "echidna_sole_crush_silent.mp4"
     final_mp4 = VIDEO_DIR / "echidna_sole_crush.mp4"
@@ -260,7 +252,7 @@ def main() -> None:
         check=True,
     )
 
-    # Color grade + loud stereo SFX (loudnorm + gain)
+    # Color grade + quiet stereo AAC (no gain boost)
     subprocess.run(
         [
             "ffmpeg", "-y",
@@ -268,7 +260,7 @@ def main() -> None:
             "-i", str(stereo_path),
             "-filter_complex",
             "[0:v]eq=contrast=1.05:saturation=1.08:brightness=0.01,vignette=PI/5[v];"
-            "[1:a]loudnorm=I=-12:TP=-0.5:LRA=10,volume=3.0[a]",
+            "[1:a]volume=0.7[a]",
             "-map", "[v]",
             "-map", "[a]",
             "-c:v", "libx264",
@@ -277,7 +269,7 @@ def main() -> None:
             "-preset", "medium",
             "-c:a", "aac",
             "-profile:a", "aac_low",
-            "-b:a", "256k",
+            "-b:a", "192k",
             "-ac", "2",
             "-ar", "44100",
             "-shortest",
@@ -288,15 +280,14 @@ def main() -> None:
         check=True,
     )
 
-    # Also export a standalone mp3 so audio can be checked without video
     mp3_path = VIDEO_DIR / "echidna_sole_crush_sfx.mp3"
     subprocess.run(
         [
             "ffmpeg", "-y",
             "-i", str(stereo_path),
-            "-filter:a", "loudnorm=I=-12:TP=-0.5:LRA=10,volume=3.0",
+            "-filter:a", "volume=0.7",
             "-c:a", "libmp3lame",
-            "-b:a", "192k",
+            "-b:a", "160k",
             str(mp3_path),
         ],
         check=True,
