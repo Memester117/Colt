@@ -1,10 +1,15 @@
 # Echidna sole crush (POV)
 
-Short anime POV clip: Echidna steps down until her sole fills and smothers the camera.
+Short anime POV clip: Echidna steps down until her sweaty sole fills and smothers the camera, with crush + wet-skin SFX.
 
 ## Output
 
-- `out/echidna_sole_crush.mp4` — final 720×960, ~5.5s, 30fps
+- `out/echidna_sole_crush.mp4` — final 720×960, ~6s, 30fps, AAC audio
+- `audio/crush_bed.wav` — synthesized SFX bed (whoosh, wet drips/squelches, slap, crush rumble, soft breath)
+
+## Sequence
+
+approach → descend → loom → fill → **sweaty sole macro** → impact → smother
 
 ## Rebuild
 
@@ -12,4 +17,4 @@ Short anime POV clip: Echidna steps down until her sole fills and smothers the c
 python3 make_video.py
 ```
 
-Requires keyframes at `/opt/cursor/artifacts/assets/crush_0{1..6}_*.jpg` (or update paths in `make_video.py`) and `ffmpeg` + Pillow.
+Needs `keyframes/` (including `crush_04b_sweaty.jpg`), `ffmpeg`, Pillow, and numpy.
