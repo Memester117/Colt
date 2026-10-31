@@ -213,11 +213,33 @@ def main() -> None:
     for i, fr in enumerate(frames):
         fr.save(OUT_DIR / f"frame_{i:04d}.png", optimize=True)
 
-    # Audio bed
+    # Audio bed — compressed + maximized so it's clearly audible in players
+    import numpy as np
+
     wav_path = AUDIO_DIR / "crush_bed.wav"
+    stereo_path = AUDIO_DIR / "crush_bed_loud.wav"
     bed = build_bed(duration, impact_time)
-    write_wav(wav_path, bed)
-    print(f"SFX bed -> {wav_path}")
+    peak = float(np.max(np.abs(bed))) + 1e-9
+    bed = bed / peak
+    compressed = np.sign(bed) * np.power(np.abs(bed), 0.65)
+    peak2 = float(np.max(np.abs(compressed))) + 1e-9
+    compressed = compressed / peak2 * 0.89
+    write_wav(wav_path, compressed)
+
+    # Stereo WAV for better player compatibility
+    import wave as _wave
+
+    delay = int(0.008 * 44100)
+    left = compressed
+    right = np.concatenate([np.zeros(delay), compressed[:-delay]]) if delay else compressed * 0.98
+    stereo = np.stack([left, right], axis=1)
+    pcm = (np.clip(stereo, -1, 1) * 32767.0).astype(np.int16)
+    with _wave.open(str(stereo_path), "wb") as wf:
+        wf.setnchannels(2)
+        wf.setsampwidth(2)
+        wf.setframerate(44100)
+        wf.writeframes(pcm.tobytes())
+    print(f"SFX bed -> {stereo_path}")
 
     raw_mp4 = VIDEO_DIR / "echidna_sole_crush_silent.mp4"
     final_mp4 = VIDEO_DIR / "echidna_sole_crush.mp4"
@@ -238,26 +260,48 @@ def main() -> None:
         check=True,
     )
 
-    # Color grade + mux SFX
-    vf = "eq=contrast=1.05:saturation=1.08:brightness=0.01,vignette=PI/5"
+    # Color grade + loud stereo SFX (loudnorm + gain)
     subprocess.run(
         [
             "ffmpeg", "-y",
             "-i", str(raw_mp4),
-            "-i", str(wav_path),
-            "-vf", vf,
+            "-i", str(stereo_path),
+            "-filter_complex",
+            "[0:v]eq=contrast=1.05:saturation=1.08:brightness=0.01,vignette=PI/5[v];"
+            "[1:a]loudnorm=I=-12:TP=-0.5:LRA=10,volume=3.0[a]",
+            "-map", "[v]",
+            "-map", "[a]",
             "-c:v", "libx264",
             "-pix_fmt", "yuv420p",
             "-crf", "18",
             "-preset", "medium",
             "-c:a", "aac",
-            "-b:a", "192k",
+            "-profile:a", "aac_low",
+            "-b:a", "256k",
+            "-ac", "2",
+            "-ar", "44100",
             "-shortest",
             "-movflags", "+faststart",
+            "-disposition:a:0", "default",
             str(final_mp4),
         ],
         check=True,
     )
+
+    # Also export a standalone mp3 so audio can be checked without video
+    mp3_path = VIDEO_DIR / "echidna_sole_crush_sfx.mp3"
+    subprocess.run(
+        [
+            "ffmpeg", "-y",
+            "-i", str(stereo_path),
+            "-filter:a", "loudnorm=I=-12:TP=-0.5:LRA=10,volume=3.0",
+            "-c:a", "libmp3lame",
+            "-b:a", "192k",
+            str(mp3_path),
+        ],
+        check=True,
+    )
+    Path("/opt/cursor/artifacts/echidna_sole_crush_sfx.mp3").write_bytes(mp3_path.read_bytes())
 
     ARTIFACT.parent.mkdir(parents=True, exist_ok=True)
     data = final_mp4.read_bytes()
