@@ -1,0 +1,5 @@
+frames/frame_*.png
+out/*_raw.mp4
+previews/
+__pycache__/
+*.pyc
